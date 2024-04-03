@@ -3,12 +3,13 @@ import time
 import pandas as pd
 import numpy as np
 from icecream import ic
-from utils.manipulations import find_pattern_on_list, globalize_backslashes
-from utils.files import read_file_from_gslib
+from andesite.utils.manipulations import find_pattern_on_list, globalize_backslashes
+from andesite.utils.files import read_file_from_gslib
 from .categoric_compositing import one_drill_categoric, one_drill_categoric_multi
 from .numeric_compositing import one_drill_numeric, one_drill_numeric_multi
 from pandas.api.types import is_numeric_dtype
-from utils._globals import (
+
+from andesite.utils._globals import (
     POSSIBLE_X_COLUMNS,
     POSSIBLE_Y_COLUMNS,
     POSSIBLE_Z_COLUMNS,
@@ -24,10 +25,9 @@ class DatafileFactory:
     def __init__(self, path):
         self.path = path
         self.dataframe = self.read()
-        self.grab_parameters()
+
         self.metadata = {
             'path': self.path,
-            'holeid': self.holeid_col
         }
 
     def __repr__(self):
@@ -47,55 +47,103 @@ class DatafileFactory:
     def get_metadata(self):
         return self.metadata
 
-    def grab_parameters(self):
-        self.holeid_col = find_pattern_on_list(self.dataframe.columns, POSSIBLE_HOLEID_COLUMNS)
-
 class Assay(DatafileFactory):
-    def __init__(self, path):
-        super().__init__(path)
+    def __init__(self, path, holeid_col=None, from_col=None, to_col=None, length=None):
+        self.path = path
+        self.dataframe = self.read()
+        self.holeid_col = holeid_col
+        self.from_col = from_col
+        self.to_col = to_col
+        self.length = length
+        self.metadata = {
+            'path': self.path,
+        }
+
+        self.__grab_parameters()
+
+    def __grab_parameters(self):
+        if self.holeid_col is None:
+            self.holeid_col = find_pattern_on_list(self.dataframe.columns, POSSIBLE_HOLEID_COLUMNS)
+        if self.from_col is None:
+            self.from_col = find_pattern_on_list(self.dataframe.columns, POSSIBLE_FROM_COLUMNS)
+        if self.to_col is None:
+            self.to_col = find_pattern_on_list(self.dataframe.columns, POSSIBLE_TO_COLUMNS)
+        if self.length is None:
+            self.length = find_pattern_on_list(self.dataframe.columns, POSSIBLE_LENGTH_COLUMNS)
+
         self.metadata.update({
+            'holeid': self.holeid_col,
             'from': self.from_col,
             'to': self.to_col,
             'length': self.length
         })
 
-    def grab_parameters(self):
-        super().grab_parameters()
-        self.from_col = find_pattern_on_list(self.dataframe.columns, POSSIBLE_FROM_COLUMNS)
-        self.to_col = find_pattern_on_list(self.dataframe.columns, POSSIBLE_TO_COLUMNS)
-        self.length = find_pattern_on_list(self.dataframe.columns, POSSIBLE_LENGTH_COLUMNS)
-
 class Collar(DatafileFactory):
-    def __init__(self, path):
-        super().__init__(path)
+    def __init__(self, path, holeid_col=None, east=None, north=None, elevation=None, length=None):
+        self.path = path
+        self.dataframe = self.read()
+        self.holeid_col = holeid_col
+        self.east = east
+        self.north = north
+        self.elevation = elevation
+        self.length = length
+        self.metadata = {
+            'path': self.path
+        }
+
+        self.__grab_parameters()
+
+
+    def __grab_parameters(self):
+        if self.holeid_col is None:
+            self.holeid_col = find_pattern_on_list(self.dataframe.columns, POSSIBLE_HOLEID_COLUMNS)
+        if self.east is None:
+            self.east = find_pattern_on_list(self.dataframe.columns, POSSIBLE_X_COLUMNS)
+        if self.north is None:
+            self.north = find_pattern_on_list(self.dataframe.columns, POSSIBLE_Y_COLUMNS)
+        if self.elevation is None:
+            self.elevation = find_pattern_on_list(self.dataframe.columns, POSSIBLE_Z_COLUMNS)
+        if self.length is None:
+            self.length = find_pattern_on_list(self.dataframe.columns, POSSIBLE_LENGTH_COLUMNS)
+
         self.metadata.update({
+            'holeid': self.holeid_col,
             'east': self.east,
             'north': self.north,
             'elevation': self.elevation,
             'length': self.length
         })
 
-    def grab_parameters(self):
-        super().grab_parameters()
-        self.east = find_pattern_on_list(self.dataframe.columns, POSSIBLE_X_COLUMNS)
-        self.north = find_pattern_on_list(self.dataframe.columns, POSSIBLE_Y_COLUMNS)
-        self.elevation = find_pattern_on_list(self.dataframe.columns, POSSIBLE_Z_COLUMNS)
-        self.length = find_pattern_on_list(self.dataframe.columns, POSSIBLE_LENGTH_COLUMNS)
-
 class Survey(DatafileFactory):
-    def __init__(self, path):
-        super().__init__(path)
+    def __init__(self, path, holeid_col=None, azim=None, dip=None, depth=None):
+        self.path = path
+        self.dataframe = self.read()
+        self.holeid_col = holeid_col
+        self.azim = azim
+        self.dip = dip
+        self.depth = depth
+        self.metadata = {
+            'path': self.path
+        }
+
+        self.__grab_parameters()
+
+    def __grab_parameters(self):
+        if self.holeid_col is None:
+            self.holeid_col = find_pattern_on_list(self.dataframe.columns, POSSIBLE_HOLEID_COLUMNS)
+        if self.azim is None:
+            self.azim = find_pattern_on_list(self.dataframe.columns, POSSIBLE_AZIM_COLUMNS)
+        if self.dip is None:
+            self.dip = find_pattern_on_list(self.dataframe.columns, POSSIBLE_DIP_COLUMNS)
+        if self.depth is None:
+            self.depth = find_pattern_on_list(self.dataframe.columns, POSSIBLE_TO_COLUMNS)
+
         self.metadata.update({
+            'holeid': self.holeid_col,
             'depth': self.depth,
             'azim': self.azim,
             'dip': self.dip
         })
-
-    def grab_parameters(self):
-        super().grab_parameters()
-        self.depth = find_pattern_on_list(self.dataframe.columns, POSSIBLE_TO_COLUMNS)
-        self.azim = find_pattern_on_list(self.dataframe.columns, POSSIBLE_AZIM_COLUMNS)
-        self.dip = find_pattern_on_list(self.dataframe.columns, POSSIBLE_DIP_COLUMNS)
 
 class DatafileComposite:
     """
@@ -121,7 +169,7 @@ class DatafileComposite:
         assert isinstance(assay, Assay), "assay must be type <<Assay>>"
         assert isinstance(collar, Collar), "collar must be type <<Collar>>"
         assert isinstance(survey, Survey), "survey must be type <<Survey>>"
-        
+
         self.assay = assay
         self.collar = collar
         self.survey = survey
@@ -134,25 +182,34 @@ class DatafileComposite:
         self.check_holeid_match()
 
     def check_holeid_match(self):
-        # print('check_holeid_match() called')
-        dhid_in_all = list(set(self.assay_df[self.assay.holeid_col].to_numpy()) & 
-                           set(self.survey_df[self.survey.holeid_col].to_numpy()) & 
-                           set(self.collar_df[self.collar.holeid_col].to_numpy()))
-        self.final_collar = self.collar_df[self.collar_df[self.collar.holeid_col].isin(dhid_in_all)].reset_index(drop = True)
-        self.final_assay = self.assay_df[self.assay_df[self.assay.holeid_col].isin(dhid_in_all)].reset_index(drop = True)
-        self.final_survey = self.survey_df[self.survey_df[self.survey.holeid_col].isin(dhid_in_all)].reset_index(drop = True)
+        # Get unique holeid values from each dataframe
+        assay_holeids = set(self.assay_df[self.assay.holeid_col])
+        survey_holeids = set(self.survey_df[self.survey.holeid_col])
+        collar_holeids = set(self.collar_df[self.collar.holeid_col])
 
+        # Find intersection of holeid values in all dataframes
+        common_holeids = assay_holeids.intersection(survey_holeids, collar_holeids)
+        # Filter dataframes to include only rows with common holeid values
+        self.final_collar = self.collar_df[self.collar_df[self.collar.holeid_col].isin(common_holeids)].reset_index(drop=True)
+        self.final_assay = self.assay_df[self.assay_df[self.assay.holeid_col].isin(common_holeids)].reset_index(drop=True)
+        self.final_survey = self.survey_df[self.survey_df[self.survey.holeid_col].isin(common_holeids)].reset_index(drop=True)
 
     def holeid_missmatch(self):
-        # print('holeid_missmatch() called')
-        dhid_not_in_all = list(set(self.assay_df[self.assay.holeid_col].to_numpy()) ^ 
-                               set(self.survey_df[self.survey.holeid_col].to_numpy()) ^ 
-                               set(self.collar_df[self.collar.holeid_col].to_numpy()))
-        if len(dhid_not_in_all) > 0:
-            np.savetxt('missing_drillholes.txt', np.array(dhid_not_in_all, dtype=np.object0), fmt="%s")
-            return 'Los codigos de sondaje que no se encuentran en todas las bases de datos, los sondajes faltantes se guardan en <<missing_drillholes.txt>>'
+        # Get unique holeid values from each dataframe
+        assay_holeids = set(self.assay_df[self.assay.holeid_col])
+        survey_holeids = set(self.survey_df[self.survey.holeid_col])
+        collar_holeids = set(self.collar_df[self.collar.holeid_col])
+
+        # Find holeid values that are present in at least one dataframe
+        all_holeids = assay_holeids | survey_holeids | collar_holeids
+
+        # Find holeid values that are not present in all dataframes
+        mismatched_holeids = list(all_holeids - (assay_holeids & survey_holeids & collar_holeids))
+        if len(mismatched_holeids) > 0:
+            np.savetxt('missing_drillholes.txt', np.array(mismatched_holeids, dtype=np.object0), fmt="%s")
+            return 'The holeid sampling codes that are not found in all the databases, the missing holeid samples are stored in <<missing_drillholes.txt>>'
         return 'No missmatch found on databases'
-    
+
     def composite_functions_handler(self, df, holeid, mode, var_lst, composite_length):
         #print(f'composite_functions_handler() called for {holeid}')
         assert mode in ['numeric', 'categorical'], 'mode parameter must be <numeric> or <categorical>'
@@ -182,7 +239,7 @@ class DatafileComposite:
             for v in vars:
                 vars_types[v] = self.check_dtype(self.assay_df[v])
         return vars_types
-    
+
     def clasify_target_values(self, vars):
         # print('clasify_target_values() called')
         self.variables_dict = self.set_target_values(vars)
@@ -194,12 +251,11 @@ class DatafileComposite:
                 self.cat_vars.append(k)
         return self.num_vars, self.cat_vars
 
-
     def _compositing(self, vars, length):
         # Tell the user the missmatch of the datasets
         if isinstance(vars, str):
             vars = [vars]
-        # self.holeid_missmatch()
+        self.holeid_missmatch()
         # Separate the numeric and the categorical variables in 2 lists
         numeric_vars, categorical_vars = self.clasify_target_values(vars)
         # Calculate the composite for both numeric and categorical variables
@@ -218,7 +274,7 @@ class DatafileComposite:
             return df_numeric
         else:
             return df_categorical
-    
+
     def __set_survey_tail(self, row):
         # This simple function creates a "TO" column on the survey dataset specifically
         # it is only use in the context of composite the survey AZ and DIP
@@ -240,20 +296,20 @@ class DatafileComposite:
         # Convert azimuth and dip to radians
         az_rad = np.radians(az)
         dip_rad = np.radians(dip)
-        
+
         # Calculate the changes in coordinates
         delta_z = length * np.sin(dip_rad)
         delta_y = length * np.cos(dip_rad) * np.cos(az_rad)
         delta_x = length * np.cos(dip_rad) * np.sin(az_rad)
-        
+
         # Calculate the cumulative sum of changes
         new_z = np.round(z + np.cumsum(delta_z), 3)
         new_y = np.round(y + np.cumsum(delta_y), 3)
         new_x = np.round(x + np.cumsum(delta_x), 3)
-        
+
         # Transpose and concatenate the arrays to represent coordinates as a 3D space
         # new_coords_3d = np.round(np.concatenate((new_x[:, np.newaxis], new_y[:, np.newaxis], new_z[:, np.newaxis]), axis=1), 3)
-        
+
         return new_x, new_y, new_z
 
     def composite(self, vars, length, output_filename=None):
@@ -264,9 +320,9 @@ class DatafileComposite:
         results_survey = [one_drill_numeric_multi(group, self.survey.holeid_col, hole_id, self.survey.depth, f'{self.survey.depth}tail', [self.survey.azim, self.survey.dip], length) for hole_id, group in self.final_survey.groupby(self.survey.holeid_col)]
         survey_df = pd.concat(results_survey)
         merge_df = composites_df.merge(
-            survey_df, 
-            left_on=[self.assay.holeid_col, 'from', 'to'], 
-            right_on=[self.survey.holeid_col, 'from', 'to'], 
+            survey_df,
+            left_on=[self.assay.holeid_col, 'from', 'to'],
+            right_on=[self.survey.holeid_col, 'from', 'to'],
             how='outer'
         )
         merge_df = merge_df.sort_values(by=[self.assay.holeid_col, 'from', 'to'])
@@ -283,7 +339,7 @@ class DatafileComposite:
         merge_df = merge_df.dropna(subset=['midx', 'midy', 'midz'], how='any')
         if isinstance(vars, str):
             vars = [vars]
-        composites_final = merge_df[[self.assay.holeid_col, 'from', 'to', 'midx', 'midy', 'midz', *vars]]
+        composites_final = merge_df[[self.assay.holeid_col, 'from', 'to', 'midx', 'midy', 'midz', *vars]].fillna(-99.0)
 
         if output_filename is not None:
             composites_final.to_csv(f'{output_filename}.csv', index=False)

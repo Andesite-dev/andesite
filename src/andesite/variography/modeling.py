@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 
-from variography.experimental import VariogramDatafile
+from .experimental import VariogramDatafile
 
 def rotation_matrix_azm_dip(azimuth, dip=0, rake=0):
     azimuth = np.deg2rad(azimuth)
@@ -91,7 +91,7 @@ class VariogramStructure(object):
 
     def direction(self, azimuth, dip, lag_distance, nlags, norm_values=True, plot=False):
         return self.__call__(generate_lags(azimuth, dip, float(lag_distance), nlags, plot), norm_values)
-    
+
 class VariographyModel(object):
     def __init__(self, nugget=0, struct_dict=None):
         self.models = []
@@ -223,7 +223,7 @@ class SphericalModel(object):
         result = 1.5 * h/self.range - 0.5 * np.power(h/self.range, 3)
         result[h >= self.range] = 1
         return result
-    
+
 
 class VariogramModeling:
 
@@ -245,7 +245,7 @@ class VariogramModeling:
                         'angles': (0, 0, 0),
                         'ranges': (100, 100, 100)
                     }
-                ] 
+                ]
             }
         """
         self.experimental_variogram = experimental_variogram
@@ -265,9 +265,9 @@ class VariogramModeling:
         for istr in range(len(self.parameters.get('structures'))):
             vario_model.add_structure(
                 VariogramStructure(
-                    model_type = self.parameters.get('structures')[istr]['type'], 
-                    sill = self.parameters.get('structures')[istr]['sill'], 
-                    angles = self.parameters.get('structures')[istr]['angles'], 
+                    model_type = self.parameters.get('structures')[istr]['type'],
+                    sill = self.parameters.get('structures')[istr]['sill'],
+                    angles = self.parameters.get('structures')[istr]['angles'],
                     ranges = self.parameters.get('structures')[istr]['ranges']
             ))
             self.total_sill += self.parameters.get('structures')[istr]['sill']
@@ -336,10 +336,10 @@ class VariogramModeling:
                     marker = {
                         'color': colors[i],
                         'size': 8,
-                        'symbol': 'star' 
+                        'symbol': 'star'
                     },
                     opacity = 0.3,
-                    hovertemplate = "<b>Experimental</b><br>" + 
+                    hovertemplate = "<b>Experimental</b><br>" +
                     "Step: %{x}<br>" +
                     "Variogram: %{y:.3f}<br>" +
                     "<extra></extra>",
@@ -367,4 +367,4 @@ class VariogramModeling:
         if export:
             fig.write_html(f'modeling-{self.experimental_dirs[0, 0]}-{self.experimental_dirs[0, 1]}.html')
         return fig
-    
+

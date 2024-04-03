@@ -1,10 +1,10 @@
 import os
 import subprocess
 import tempfile
-from estimations.estimation_exceptions import OutputNameNotProvidedException, SameOutputVariablesException
-from utils.files import dataframe_to_gslib, grab_index_coordinates, grab_index_target, read_file_from_gslib, transform_datafile_to_gslib
-from utils.manipulations import globalize_backslashes
-from datafiles.grid import Grid
+from .estimation_exceptions import OutputNameNotProvidedException, SameOutputVariablesException
+from andesite.utils.files import dataframe_to_gslib, grab_index_coordinates, grab_index_target, read_file_from_gslib, transform_datafile_to_gslib
+from andesite.utils.manipulations import globalize_backslashes
+from andesite.datafiles.grid import Grid
 
 class Kriging:
 
@@ -85,7 +85,7 @@ class Kriging:
                 lines[27 + i*2] = angles
                 lines[28 + i*2] = directions
             f.writelines(lines)
-        
+
         print(f'File {self.fmt_params_path} created!')
         return self.fmt_params_path, self.fmt_out_path
 
@@ -96,12 +96,11 @@ class Kriging:
         CREATE_NO_WINDOW = 0x08000000
         output = subprocess.check_output([globalize_backslashes(os.path.join(current_dir, f'../utils/bin/{exe_file}')), f'{self.fmt_params_path}'], creationflags=CREATE_NO_WINDOW)
         output_str = output.decode("utf-8")
-        print(output_str)
         if "KT3D Version: 3.000 Finished" in output_str:
             return True
         else:
             return False
-        
+
     def save_kriging_results(self, estimate_values, variance_values):
         self.output_datafile.add_variable(self.kriging_estimate, estimate_values)
         self.output_datafile.add_variable(self.kriging_variance, variance_values)
@@ -162,9 +161,9 @@ class Kriging:
             return self.output_datafile
         else:
             raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {params_path}')
-        
+
     def save_kriging(self, output_name = ''):
-        assert self.kt_status == True, "Please run estimate() first" 
+        assert self.kt_status == True, "Please run estimate() first"
         if output_name == '':
             raise OutputNameNotProvidedException("Please provide valid names for output variables")
         dataframe_to_gslib(self.output_datafile, output_name)

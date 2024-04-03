@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
-from utils.manipulations import agg_by_categoric, find_most_relevant_cat
+from andesite.utils.manipulations import agg_by_categoric, find_most_relevant_cat
 
 
 def one_drill_categoric(dataframe: pd.DataFrame, hole_id_col: str, hole_id: str, from_col: str, to_col: str, var_col: str, comp_length: float) -> pd.DataFrame:

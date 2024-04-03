@@ -2,7 +2,7 @@ from typing import Sequence, Union
 import re
 import numpy as np
 import pandas as pd
-from utils.log import andes_logger
+from andesite.utils.log import andes_logger
 from itertools import islice
 import dask.dataframe as dd
 from os import PathLike
@@ -101,7 +101,7 @@ def agg_by_categoric(
     return data_transformed
 
 def find_pattern_on_list(
-    items: Union[Sequence[str], str], 
+    items: Union[Sequence[str], str],
     word_keys: Sequence[str]
 ) -> str:
     """Finds if a variable match a certain bag of word keys. Most common use for

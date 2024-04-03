@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
-from utils.log import andes_logger
+from andesite.utils.log import andes_logger
 from icecream import ic
 
-def one_drill_numeric(dataframe, hole_id_col: str, hole_id: str, from_col: str, to_col, var_col: str, comp_length):  
+def one_drill_numeric(dataframe, hole_id_col: str, hole_id: str, from_col: str, to_col, var_col: str, comp_length):
     """
     Given a pandas DataFrame `dataframe`, composites the data for a single hole ID based on a compositing length `comp_length`, for a single variable
 
@@ -141,7 +141,7 @@ def one_drill_numeric_multi(dataframe, hole_id_col: str, hole_id, from_col, to_c
         else:
             raise Exception(f'{c} column not found in DataFrame')
 
-    df.index = df[hole_id_col] 
+    df.index = df[hole_id_col]
     data_frame = df.loc[hole_id]
     if isinstance(data_frame, pd.Series):
         drill_from = np.array([data_frame[from_col]])

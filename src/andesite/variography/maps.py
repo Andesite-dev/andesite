@@ -7,9 +7,9 @@ import subprocess
 import tempfile
 import numpy as np
 import pandas as pd
-from utils.files import grab_index_coordinates, grab_index_target, read_file_from_gslib, transform_datafile_to_gslib
-from utils.manipulations import globalize_backslashes
-import plotly.graph_objects as go 
+from andesite.utils.files import grab_index_coordinates, grab_index_target, read_file_from_gslib, transform_datafile_to_gslib
+from andesite.utils.manipulations import globalize_backslashes
+import plotly.graph_objects as go
 import plotly.express as px
 from icecream import ic
 
@@ -55,7 +55,7 @@ class DatafileVariographicMap:
         igrade = grab_index_target(self.real_path_filename, self.input_grades)
 
         assert self.plane.upper() in ['XY', 'XZ', 'YZ'], "Choose one of these planes XY, YZ, XZ"
-        
+
         real_direction_step = 180/self.n_directions
         dirtol = 90/self.n_directions
         self._paths = []
@@ -89,7 +89,7 @@ class DatafileVariographicMap:
                 lines[11] = f'{int(stand_sills)}                                 -standardize sills? (0=no, 1=yes)\n'
                 f.writelines(lines)
             self._paths.append([fmt_params_path, fmt_out_path])
-    
+
     def get_coordinates(self, azimuth, step_size):
         # Convert azimuth from degrees to radians
         azimuth_rad = np.radians(azimuth)
@@ -194,13 +194,13 @@ class DatafileVariographicMap:
         self.varmap_df = self.transform_varmap_to_dataframe()
         self.clear()
         return self.varmap_df
-    
+
     def varmap_points(self, varmap_df):
         points = self.get_coordinates(varmap_df['direction'], varmap_df['steps'])
         values = varmap_df.loc[:, ['variogram', 'pairs']].to_numpy()
 
         return points, values
-    
+
     def clear(self):
         for file in os.listdir(tempfile.gettempdir()):
             if file.startswith('param') or file.startswith('result'):
@@ -213,10 +213,10 @@ class DatafileVariographicMap:
         if self.plane.upper() == 'XY':
             ticktext = tickvals
         else:
-            ticktext = [f'-{t}' if t > 0 and t <= 90 else 0.0 
-                        if t == 0 else '' if t > 90 and t < 270 
+            ticktext = [f'-{t}' if t > 0 and t <= 90 else 0.0
+                        if t == 0 else '' if t > 90 and t < 270
                         else f'{360 - t}' for t in tickvals]
-            
+
         if self.plane.upper() == 'XY':
             rotation = 90
         else:
@@ -265,7 +265,7 @@ class DatafileVariographicMap:
                     'ticktext': [f'{d:.1f}' for d in self.tickvalues][:-1],
                     'gridcolor': 'white',
                     'tickfont': {
-                        'size': 14, 
+                        'size': 14,
                         'family': 'Arial Black',
                         'color': 'red'
                     },
@@ -304,10 +304,10 @@ class DatafileVariographicMap:
     #     points, values = variographic_map(
     #         filepath = globalize_backslashes(self.input_drillholes_path),
     #         coord_names = coordinates_names,
-    #         grade = self.input_grades, 
-    #         ndirs = self.n_directions, 
-    #         lag_count = self.lag_count, 
-    #         lag_size = self.lag_size, 
+    #         grade = self.input_grades,
+    #         ndirs = self.n_directions,
+    #         lag_count = self.lag_count,
+    #         lag_size = self.lag_size,
     #         plane = self.plane
     #     )
 

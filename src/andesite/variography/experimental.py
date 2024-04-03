@@ -3,8 +3,8 @@ import re
 import subprocess
 import tempfile
 import pandas as pd
-from utils.files import grab_index_coordinates, grab_index_target, read_file_from_gslib, transform_datafile_to_gslib
-from utils.manipulations import globalize_backslashes
+from andesite.utils.files import grab_index_coordinates, grab_index_target, read_file_from_gslib, transform_datafile_to_gslib
+from andesite.utils.manipulations import globalize_backslashes
 import plotly.graph_objects as go
 
 
@@ -16,7 +16,7 @@ class VariogramDatafile:
 
     def load(self):
         return self.variogram.copy()
-    
+
     def get_metadata(self):
         return self.parameters
 
@@ -44,7 +44,7 @@ class Variogram:
 
     def get_metadata(self):
         return self.metadata
-    
+
     def normalize_dip(self, value):
         result = (value - 90) % 180
         if result > 90:
@@ -98,7 +98,7 @@ class Variogram:
                     ]
                 })
             f.writelines(lines)
-        print(f'{self.fmt_params_path} created sucessfully!')
+        # print(f'{self.fmt_params_path} created sucessfully!')
 
     def gamv_formatted_elipsoid(self, gamv_file):
         with open(gamv_file, 'r') as f:
@@ -155,7 +155,7 @@ class Variogram:
         })
         self.clear()
         return VariogramDatafile(variogram=df, parameters=self.metadata)
-    
+
     def elipsoid_variogram(self, stand_sills: bool = False) -> VariogramDatafile:
         self.metadata.update({
             'norm': stand_sills

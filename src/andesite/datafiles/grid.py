@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from utils.files import dataframe_to_gslib, read_file_from_gslib
+from andesite.utils.files import dataframe_to_gslib, read_file_from_gslib
 
 
 class Grid:
