@@ -1,11 +1,11 @@
-from typing import Sequence, Union
 import re
 import numpy as np
 import pandas as pd
-from andesite.utils.log import andes_logger
-from itertools import islice
-import dask.dataframe as dd
 from os import PathLike
+import dask.dataframe as dd
+from itertools import islice
+from typing import Sequence, Union
+from andesite.utils.log import andes_logger
 
 def globalize_backslashes(text):
     """

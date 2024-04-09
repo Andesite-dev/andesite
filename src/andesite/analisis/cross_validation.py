@@ -1,6 +1,6 @@
 import numpy as np
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, confusion_matrix
 import plotly.graph_objects as go
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, confusion_matrix
 
 def regression_report(true_values, estimated_values):
     mse = mean_squared_error(true_values, estimated_values)

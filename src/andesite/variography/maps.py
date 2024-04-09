@@ -14,20 +14,22 @@ import plotly.express as px
 from icecream import ic
 
 
-class DatafileVariographicMap:
+class VarMap:
 
-    #def __init__(self, input_drillholes, input_grades, plane, n_directions, lag_count, lag_size, out_file):
-    def __init__(self, input_drillholes, coordinates, input_grades, params):
+    def __init__(self, input_drillholes, coordinates, input_grades, plane, n_directions, lag_count, lag_size, out_file):
         self.input_drillholes_path = input_drillholes
         self.coordinates = coordinates
         self.input_grades = input_grades
-        self.plane = params.get('plane')
-        self.n_directions = params.get('n_directions')
-        self.lag_count = params.get('lag_count')
-        self.lag_size = params.get('lag_size')
-        # self.out_file = out_file
+        self.plane = plane
+        self.n_directions = n_directions
+        self.lag_count = lag_count
+        self.lag_size = lag_size
+        self.out_file = out_file
         self.bandh = 999999
         self.bandv = 999999
+
+    def set_workdir(self, workdir):
+        self.workdir = workdir
 
     def hint(self):
         self.real_path_filename = transform_datafile_to_gslib(self.input_drillholes_path)
@@ -49,11 +51,9 @@ class DatafileVariographicMap:
             file.writelines(lines)
 
     def create_gamv_params_temp(self, stand_sills=False):
-        self.clear()
         self.real_path_filename = transform_datafile_to_gslib(self.input_drillholes_path)
         ix, iy, iz = grab_index_coordinates(self.real_path_filename, self.coordinates)
         igrade = grab_index_target(self.real_path_filename, self.input_grades)
-
         assert self.plane.upper() in ['XY', 'XZ', 'YZ'], "Choose one of these planes XY, YZ, XZ"
 
         real_direction_step = 180/self.n_directions
@@ -282,40 +282,3 @@ class DatafileVariographicMap:
             fig.write_html(f"varmap-{self.input_grades}-{self.plane.upper()}.html")
 
         return fig
-
-    # def run(self):
-    #     # build the variogram parameters
-    #     input_drillholes_df = SpatialDatafile()
-    #     input_drillholes_df.load_data(self.input_drillholes_path)
-    #     coordinates_names = input_drillholes_df.points_variables
-
-    #     params_dict = {
-    #         'self.input_grades': self.input_grades,
-    #         'self.input_drillholes_path': globalize_backslashes(self.input_drillholes_path),
-    #         'coordinates_names': coordinates_names,
-    #         'self.plane': self.plane,
-    #         'self.n_directions': self.n_directions,
-    #         'self.lag_count': self.lag_count,
-    #         'self.lag_size': self.lag_size,
-    #         'self.out_file': self.out_file,
-    #         'self.workdir': self.workdir
-    #     }
-
-    #     points, values = variographic_map(
-    #         filepath = globalize_backslashes(self.input_drillholes_path),
-    #         coord_names = coordinates_names,
-    #         grade = self.input_grades,
-    #         ndirs = self.n_directions,
-    #         lag_count = self.lag_count,
-    #         lag_size = self.lag_size,
-    #         plane = self.plane
-    #     )
-
-    #     datafile = VariographicMapDatafile()
-    #     metadata = {"input_drillholes_path": self.input_drillholes_path,
-    #                 "input_variable": self.input_grades,
-    #                 "plane": self.plane,
-    #                 "n_directions": self.n_directions,
-    #                 "lag_count": self.lag_count,
-    #                 "lag_size": self.lag_size}
-    #     datafile.save_results(points, values, metadata, self.out_file)

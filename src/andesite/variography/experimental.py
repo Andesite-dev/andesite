@@ -6,7 +6,7 @@ import pandas as pd
 from andesite.utils.files import grab_index_coordinates, grab_index_target, read_file_from_gslib, transform_datafile_to_gslib
 from andesite.utils.manipulations import globalize_backslashes
 import plotly.graph_objects as go
-
+from icecream import ic
 
 class VariogramDatafile:
 
@@ -145,16 +145,16 @@ class Variogram:
         self.create_params_temp(elipsoid=False, stand_sills=stand_sills)
 
         self.run_gamv(self.fmt_params_path)
+        print(f'{self.fmt_out_path} file created!')
         self.gamv_formatted(self.fmt_out_path)
 
         df = read_file_from_gslib(self.fmt_out_path).compute()
-        df = df.rename(columns={'steps': 'steps_dir1', 'gamma': 'gamma_dir1', 'pairs': 'pairs_dir1'}, inplace=True).iloc[1:]
-        #print(f'{self.fmt_out_path} file created!')
+        df.rename(columns={'steps': 'steps_dir1', 'gamma': 'gamma_dir1', 'pairs': 'pairs_dir1'}, inplace=True)
         self.metadata.update({
             'vartype': 'single'
         })
         self.clear()
-        return VariogramDatafile(variogram=df, parameters=self.metadata)
+        return VariogramDatafile(variogram=df.iloc[1:], parameters=self.metadata)
 
     def elipsoid_variogram(self, stand_sills: bool = False) -> VariogramDatafile:
         self.metadata.update({
@@ -164,7 +164,7 @@ class Variogram:
         self.run_gamv(self.fmt_params_path)
 
         self.gamv_formatted_elipsoid(self.fmt_out_path)
-        #print(f'{self.fmt_out_path} file created!')
+        print(f'{self.fmt_out_path} file created!')
         df_1 = read_file_from_gslib(f'{os.path.splitext(self.fmt_out_path)[0]}_1.out').compute()
         df_2 = read_file_from_gslib(f'{os.path.splitext(self.fmt_out_path)[0]}_2.out').compute()
         df_3 = read_file_from_gslib(f'{os.path.splitext(self.fmt_out_path)[0]}_3.out').compute()
@@ -175,7 +175,7 @@ class Variogram:
         self.metadata.update({
             'vartype': 'elipsoid'
         })
-        self.clear()
+        # self.clear()
         return VariogramDatafile(variogram=pd.concat([df_1, df_2, df_3], axis=1).iloc[1:], parameters=self.metadata)
 
 

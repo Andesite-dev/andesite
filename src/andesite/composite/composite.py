@@ -1,13 +1,11 @@
-import os
-import time
-import pandas as pd
 import numpy as np
+import pandas as pd
 from icecream import ic
-from andesite.utils.manipulations import find_pattern_on_list, globalize_backslashes
-from andesite.utils.files import read_file_from_gslib
-from .categoric_compositing import one_drill_categoric, one_drill_categoric_multi
-from .numeric_compositing import one_drill_numeric, one_drill_numeric_multi
 from pandas.api.types import is_numeric_dtype
+from andesite.utils.files import read_file_from_gslib
+from .numeric_compositing import one_drill_numeric, one_drill_numeric_multi
+from .categoric_compositing import one_drill_categoric, one_drill_categoric_multi
+from andesite.utils.manipulations import find_pattern_on_list, globalize_backslashes
 
 from andesite.utils._globals import (
     POSSIBLE_X_COLUMNS,
@@ -177,6 +175,7 @@ class DatafileComposite:
         self.assay_df = self.assay.dataframe
         self.survey_df = self.survey.dataframe
         self.collar_df = self.collar.dataframe
+        self.has_missing = False
         self.metadata = {}
 
         self.check_holeid_match()
@@ -206,6 +205,7 @@ class DatafileComposite:
         # Find holeid values that are not present in all dataframes
         mismatched_holeids = list(all_holeids - (assay_holeids & survey_holeids & collar_holeids))
         if len(mismatched_holeids) > 0:
+            self.has_missing = True
             np.savetxt('missing_drillholes.txt', np.array(mismatched_holeids, dtype=np.object0), fmt="%s")
             return 'The holeid sampling codes that are not found in all the databases, the missing holeid samples are stored in <<missing_drillholes.txt>>'
         return 'No missmatch found on databases'
@@ -252,10 +252,10 @@ class DatafileComposite:
         return self.num_vars, self.cat_vars
 
     def _compositing(self, vars, length):
+        self.holeid_missmatch()
         # Tell the user the missmatch of the datasets
         if isinstance(vars, str):
             vars = [vars]
-        self.holeid_missmatch()
         # Separate the numeric and the categorical variables in 2 lists
         numeric_vars, categorical_vars = self.clasify_target_values(vars)
         # Calculate the composite for both numeric and categorical variables
@@ -339,13 +339,8 @@ class DatafileComposite:
         merge_df = merge_df.dropna(subset=['midx', 'midy', 'midz'], how='any')
         if isinstance(vars, str):
             vars = [vars]
-        composites_final = merge_df[[self.assay.holeid_col, 'from', 'to', 'midx', 'midy', 'midz', *vars]].fillna(-99.0)
+        composites_final = merge_df[[self.assay.holeid_col, 'from', 'to', 'midx', 'midy', 'midz', *vars]]#.fillna(-99.0)
 
         if output_filename is not None:
             composites_final.to_csv(f'{output_filename}.csv', index=False)
         return composites_final
-
-
-# Compositacion Lab a 2 metros a 2 variables 1.35 segundos -> 11k compositos (na included)
-# Compositacion de Parker a 1.5 metrso de 13 variables: 14.345 segundos -> 81k compositos (na included)
-# Compositacion de RQD a 1.5 metros a 1 variable: 2 min 12.891 segundos -> 287k compositos (na included)

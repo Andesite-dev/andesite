@@ -1,13 +1,13 @@
-from os import PathLike
 import os
-import tempfile
 import time
-from typing import Union, Sequence
-from itertools import islice
-import dask.dataframe as dd
-import polars as pl
+import tempfile
 import numpy as np
+import polars as pl
 import pandas as pd
+from os import PathLike
+import dask.dataframe as dd
+from itertools import islice
+from typing import Union, Sequence
 
 def grab_n_cols(
     datafile: Union[str, "PathLike[str]"]
@@ -29,7 +29,7 @@ def grab_n_cols(
         for line in islice(file, 1, 2):
             n_cols = line.strip().split()
             return np.int32(n_cols[0])
-        
+
 def grab_col_names(
     datafile: Union[str, "PathLike[str]"]
 ) -> Sequence[str]:
@@ -112,7 +112,7 @@ def dataframe_to_gslib(df: Union[pd.DataFrame, pl.DataFrame], output_filename: s
     size_header = len(header.encode("utf-8"))
     dataframe = dataframe.rename({f'{cols[-1]}': f'{cols[-1]}' + '_'*(size_header - size_first_line + len(cols) + 1)})
     for c in dataframe.columns:
-        if dataframe[c].dtype() in pl.NUMERIC_DTYPES:
+        if dataframe[c].dtype in pl.NUMERIC_DTYPES:
             dataframe = dataframe.with_columns(pl.col(c).fill_null(-999).alias(c))
         else:
             dataframe = dataframe.with_columns(pl.col(c).fill_null('NONE').alias(c))

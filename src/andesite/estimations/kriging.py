@@ -1,23 +1,30 @@
 import os
-import subprocess
 import tempfile
+import subprocess
+from andesite.datafiles.grid import Grid
+from andesite.utils.manipulations import globalize_backslashes
 from .estimation_exceptions import OutputNameNotProvidedException, SameOutputVariablesException
 from andesite.utils.files import dataframe_to_gslib, grab_index_coordinates, grab_index_target, read_file_from_gslib, transform_datafile_to_gslib
-from andesite.utils.manipulations import globalize_backslashes
-from andesite.datafiles.grid import Grid
 
-class Kriging:
+KT3DSEQ_BIN_PATH = '../utils/bin/kt3d_Seq.exe'
+KT3DPAR_BIN_PATH = '../utils/bin/kt3d_OpenMP.exe'
+KT3DPARAMETERS_PATH = '../utils/bin/kt3d-generic.par'
 
-    def __init__(self, input_drillholes, coordinates, grades, grid_metadata, variogram_model, output_datafile, parameters, estimate_name, variance_name):
+class KrigingExecutor:
+    def __init__(self, input_drillholes, coordinates, grades, variogram_structs, variogram_nugget, grid_mn, grid_n, grid_siz, output_datafile, parameters, out_vars):
         self.input_drillholes = input_drillholes
         self.coordinates = coordinates
         self.input_grades = grades
-        self.grid_metadata = grid_metadata
-        self.variogram_model = variogram_model
+        self.variogram_structs = variogram_structs
+        self.variogram_nugget = variogram_nugget
+        self.grid_mn = grid_mn
+        self.grid_n = grid_n
+        self.grid_siz = grid_siz
         self.output_datafile = output_datafile
         self.kriging_parameters = parameters
-        self.kriging_estimate = estimate_name # Estas puden venir del run no especificamente de aquí
-        self.kriging_variance = variance_name # Estas pueden venid del run no especificamente de inicio
+        self.kriging_estimate = out_vars[0]
+        self.kriging_variance = out_vars[1]
+        self.n_structs = len(self.variogram_structs)
 
     def grab_varmodel_params(self, variogram_structures):
         """
@@ -41,18 +48,15 @@ class Kriging:
         self.real_path_drillholes = transform_datafile_to_gslib(self.input_drillholes)
         ix, iy, iz = grab_index_coordinates(self.real_path_drillholes, self.coordinates)
         igrade = grab_index_target(self.real_path_drillholes, self.input_grades)
-        xmn, ymn, zmn = self.grid_metadata['grid_mn']
-        nx, ny, nz = self.grid_metadata['grid_n']
-        xsiz, ysiz, zsiz = self.grid_metadata['grid_siz']
+        xmn, ymn, zmn = self.grid_mn
+        nx, ny, nz = self.grid_n
+        xsiz, ysiz, zsiz = self.grid_siz
         xdc, ydc, zdc = self.kriging_parameters['discretization']
         min_data, max_data, max_octants = self.kriging_parameters['search data']
         xradius, yradius, zradius = self.kriging_parameters['search radius']
         xangle, yangle, zangle = self.kriging_parameters['search angles']
         krig_type = 1 if self.kriging_parameters['type'] == 'Ordinary' else 0
         krig_mean = self.kriging_parameters['simple kriging'][0]
-        structures = self.variogram_model['structures']
-        n_structures = len(structures)
-        nugget = self.variogram_model['nugget']
 
         # Creation of the parameters file for KT3D
         temp_params_path = tempfile.NamedTemporaryFile(prefix="params_kt3d"+'_', suffix=".par", delete=False)
@@ -62,7 +66,7 @@ class Kriging:
         self.fmt_out_path = globalize_backslashes(temp_out_filename_path.name)
         self.fmt_dbg_path = globalize_backslashes(temp_dbg_filename_path.name)
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(current_dir, '../utils/bin/kt3d-generic.par'), 'r') as file:
+        with open(os.path.join(current_dir, KT3DPARAMETERS_PATH), 'r') as file:
             lines = file.readlines()
         with open(self.fmt_params_path, 'w') as f:
             lines[4] = f'{globalize_backslashes(self.real_path_drillholes)}                     -file with data\n'
@@ -79,9 +83,9 @@ class Kriging:
             lines[19] = f'{xradius}  {yradius}  {zradius}              -maximum search radii\n'
             lines[20] = f' {xangle}   {yangle}   {zangle}                 -angles for search ellipsoid\n'
             lines[21] = f'{krig_type}     {krig_mean}                      -0=SK,1=OK,2=non-st SK,3=exdrift\n'
-            lines[26] = f'{n_structures}    {nugget}                        -nst, nugget effect\n'
-            for i in range(n_structures):
-                angles, directions = self.grab_varmodel_params(structures[i])
+            lines[26] = f'{self.n_structs}    {self.variogram_nugget}                        -nst, nugget effect\n'
+            for i in range(self.n_structs):
+                angles, directions = self.grab_varmodel_params(self.variogram_structs[i])
                 lines[27 + i*2] = angles
                 lines[28 + i*2] = directions
             f.writelines(lines)
@@ -91,21 +95,15 @@ class Kriging:
 
     def run_kt3d(self, cross_val: bool = False):
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        exe_file = "kt3d_Seq.exe" if cross_val else "kt3d_OpenMP.exe"
-        print(f'running >>>{os.path.join(current_dir, f"{exe_file}")} {self.fmt_params_path}')
+        exe_file = KT3DSEQ_BIN_PATH if cross_val else KT3DPAR_BIN_PATH
+        print(f'running >>>{os.path.join(current_dir, exe_file)} {self.fmt_params_path}')
         CREATE_NO_WINDOW = 0x08000000
-        output = subprocess.check_output([globalize_backslashes(os.path.join(current_dir, f'../utils/bin/{exe_file}')), f'{self.fmt_params_path}'], creationflags=CREATE_NO_WINDOW)
+        output = subprocess.check_output([globalize_backslashes(os.path.join(current_dir, exe_file)), f'{self.fmt_params_path}'], creationflags=CREATE_NO_WINDOW)
         output_str = output.decode("utf-8")
         if "KT3D Version: 3.000 Finished" in output_str:
             return True
         else:
             return False
-
-    def save_kriging_results(self, estimate_values, variance_values):
-        self.output_datafile.add_variable(self.kriging_estimate, estimate_values)
-        self.output_datafile.add_variable(self.kriging_variance, variance_values)
-
-        self.output_datafile.save_data(self.output_datafile.get_metadata('path'))
 
     def format_kt3d_results(self):
         cores = os.cpu_count()
@@ -121,6 +119,12 @@ class Kriging:
             os.remove(file_sim_name)
         print(f'File {target_out_file} joined correctly')
 
+    def check_kriging_variables(self):
+        if self.kriging_estimate == self.kriging_variance:
+            raise SameOutputVariablesException("Output variables has the same name")
+        if self.kriging_estimate == '' or self.kriging_variance == '':
+            raise OutputNameNotProvidedException("Please provide valid names for output variables")
+
     def get_kt_results(self, output):
         kt3d_df = read_file_from_gslib(output).compute()
         # logger.debug(f'columns of file {os.path.basename(output)}: {kt3d_df.columns}')
@@ -129,14 +133,13 @@ class Kriging:
 
     def clear(self):
         for file in [self.fmt_params_path, self.fmt_out_path, self.fmt_dbg_path, self.real_path_drillholes]:
-            os.remove(file)
+            try:
+                os.remove(file)
+            except:
+                continue
 
     def cross_validation(self):
-        if self.kriging_estimate == self.kriging_variance:
-            raise SameOutputVariablesException("Output variables has the same name")
-        if self.kriging_estimate == '' or self.kriging_variance == '':
-            raise OutputNameNotProvidedException("Please provide valid names for output variables")
-
+        self.check_kriging_variables()
         params_path, output_path = self.create_kt3d_params(cross_val=True)
         self.kt_status = self.run_kt3d(cross_val=True)
         if self.kt_status:
@@ -144,23 +147,22 @@ class Kriging:
         else:
             raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {params_path}')
 
-    def estimate(self):
-        if self.kriging_estimate == self.kriging_variance:
-            raise SameOutputVariablesException("Output variables has the same name")
-        if self.kriging_estimate == '' or self.kriging_variance == '':
-            raise OutputNameNotProvidedException("Please provide valid names for output variables")
-
+    def estimate(self, just_results=False):
+        self.check_kriging_variables()
         params_path, output_path = self.create_kt3d_params()
 
         self.kt_status = self.run_kt3d()
         if self.kt_status:
             self.format_kt3d_results()
             self.estimate_values, self.variance_values = self.get_kt_results(output_path)
+        else:
+            raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {params_path}')
+        if just_results:
+            return self.estimate_values, self.variance_values
+        else:
             self.output_datafile[self.kriging_estimate] = self.estimate_values
             self.output_datafile[self.kriging_variance] = self.variance_values
             return self.output_datafile
-        else:
-            raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {params_path}')
 
     def save_kriging(self, output_name = ''):
         assert self.kt_status == True, "Please run estimate() first"

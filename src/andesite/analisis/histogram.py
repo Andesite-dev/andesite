@@ -1,10 +1,10 @@
-import pandas as pd
-import numpy as np
-import time
 import os
 import re
-import plotly.graph_objs as go
+import time
+import numpy as np
+import pandas as pd
 import dask.dataframe as dd
+import plotly.graph_objs as go
 
 def histograma(df: pd.DataFrame, var: str, start: float, end: float, size: float, title: str) -> go.Figure:
     """Generates a histogram plot for a specified variable in a DataFrame.
