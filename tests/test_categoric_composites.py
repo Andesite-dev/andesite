@@ -6,10 +6,10 @@ import pandas as pd
 import sys
 import pytest
 # Uncomment this line if you have issues with andes module
-sys.path.append('..')
+# sys.path.append('..')
 
 
-from composite.categoric_compositing import one_drill_categoric
+from andesite.composite.categoric_compositing import one_drill_categoric
 
 @pytest.fixture(scope='module')
 def drillholes_init():

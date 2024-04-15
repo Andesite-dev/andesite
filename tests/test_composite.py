@@ -1,7 +1,7 @@
 import os
 import time
 from icecream import ic
-from composite.composite import Assay, Collar, DatafileComposite, Survey
+from andesite.composite.composite import Assay, Collar, DatafileComposite, Survey
 
 
 assay_path = os.path.join('data', 'parker', 'Assay.csv')

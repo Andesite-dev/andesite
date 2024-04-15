@@ -132,4 +132,4 @@ dmypy.json
 *.ipynb
 
 # Pytest data
-src/andesite/pytest/data/
+tests/data

@@ -5,8 +5,8 @@ import pandas as pd
 import sys
 import pytest
 
-sys.path.append('..')
-from composite.numeric_compositing import one_drill_numeric, one_drill_numeric_multi
+# sys.path.append('..')
+from andesite.composite.numeric_compositing import one_drill_numeric, one_drill_numeric_multi
 
 @pytest.fixture(scope='module')
 def drillholes_init():
