@@ -3,4 +3,4 @@ os.environ['LOGURU_FORMAT'] = '[{time:YYYY-MM-DD HH:mm:ss}][<level>{level}</leve
 
 from loguru import logger
 
-andes_logger = logger
+andesite_logger = logger

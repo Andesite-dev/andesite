@@ -72,7 +72,7 @@ setup(
     # packages=find_packages(where="src/andesite", exclude=[".DS_Store", "__pycache__"]),
     package_data={'andesite': ["utils/RELEASE-VERSION",
                                "utils/bin/*"]},
-
+    python_requires='>=3.9',
     # entry_points={
     #     'console_scripts': ['andesite = andesite.main:program.run']
     # },

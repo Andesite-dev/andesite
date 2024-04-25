@@ -5,7 +5,7 @@ from os import PathLike
 import dask.dataframe as dd
 from itertools import islice
 from typing import Sequence, Union
-from andesite.utils.log import andes_logger
+from andesite.utils.log import andesite_logger
 
 def globalize_backslashes(text):
     """
@@ -150,6 +150,6 @@ def find_pattern_on_list(
                 matching_items.append(string)
 
     if len(matching_items) > 1:
-        andes_logger.debug(f'Warning: More than one item matches the pattern \'{word_keys}\'')
-        andes_logger.debug(f'Conflicts with {matching_items}')
+        andesite_logger.debug(f'Warning: More than one item matches the pattern \'{word_keys}\'')
+        andesite_logger.debug(f'Conflicts with {matching_items}')
     return matching_items[0] if len(matching_items) > 0 else ""

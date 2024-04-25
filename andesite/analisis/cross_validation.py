@@ -2,12 +2,12 @@ import numpy as np
 import plotly.graph_objects as go
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, confusion_matrix
 
-def regression_report(true_values, estimated_values):
-    mse = mean_squared_error(true_values, estimated_values)
-    rmse = mean_squared_error(true_values, estimated_values, squared=False)
-    mae = mean_absolute_error(true_values, estimated_values)
-    r2 = r2_score(true_values, estimated_values)
-    corrcoef = np.corrcoef(estimated_values, true_values)[0, 1]
+def regression_report(true_values, estimate_values):
+    mse = mean_squared_error(true_values, estimate_values)
+    rmse = mean_squared_error(true_values, estimate_values, squared=False)
+    mae = mean_absolute_error(true_values, estimate_values)
+    r2 = r2_score(true_values, estimate_values)
+    corrcoef = np.corrcoef(estimate_values, true_values)[0, 1]
 
     n = len(true_values)
     p = 1
@@ -82,8 +82,8 @@ def crossval_plot(report_results: dict, estimate_values, true_values, export: bo
                 },
             'tickfont': dict(color = "black"),
             'showgrid' : True,
-            'tick0': 0,
-            'dtick': 10,
+            # 'tick0': 0,
+            # 'dtick': 10,
             'range': [0, np.max(true_values)]
         },
         yaxis = {
@@ -97,8 +97,8 @@ def crossval_plot(report_results: dict, estimate_values, true_values, export: bo
             },
             'tickfont': dict(color = "black"),
             'showgrid' : True,
-            'tick0': 0,
-            'dtick': 10,
+            # 'tick0': 0,
+            # 'dtick': 10,
             'range': [0, np.max(true_values)]
         },
     )

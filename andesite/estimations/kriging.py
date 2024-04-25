@@ -1,7 +1,8 @@
 import os
 import tempfile
 import subprocess
-from andesite.datafiles.grid import Grid
+import numpy as np
+from andesite.datafiles.grid import Grid, GridDatafile
 from andesite.utils.manipulations import globalize_backslashes
 from .estimation_exceptions import OutputNameNotProvidedException, SameOutputVariablesException
 from andesite.utils.files import dataframe_to_gslib, grab_index_coordinates, grab_index_target, read_file_from_gslib, transform_datafile_to_gslib
@@ -20,11 +21,14 @@ class KrigingExecutor:
         self.grid_mn = grid_mn
         self.grid_n = grid_n
         self.grid_siz = grid_siz
-        self.output_datafile = output_datafile
         self.kriging_parameters = parameters
+        self.output_datafile = output_datafile
         self.kriging_estimate = out_vars[0]
         self.kriging_variance = out_vars[1]
         self.n_structs = len(self.variogram_structs)
+
+        self.grid = Grid(*self.grid_mn, *self.grid_siz, *self.grid_n)
+        self.block_model = self.grid.create()
 
     def grab_varmodel_params(self, variogram_structures):
         """
@@ -143,7 +147,9 @@ class KrigingExecutor:
         params_path, output_path = self.create_kt3d_params(cross_val=True)
         self.kt_status = self.run_kt3d(cross_val=True)
         if self.kt_status:
-            return read_file_from_gslib(output_path).compute()
+            raw_valcru_df = read_file_from_gslib(output_path).compute()
+            valcru_df = raw_valcru_df.replace(-999.0, np.nan)
+            return valcru_df
         else:
             raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {params_path}')
 
@@ -160,12 +166,13 @@ class KrigingExecutor:
         if just_results:
             return self.estimate_values, self.variance_values
         else:
-            self.output_datafile[self.kriging_estimate] = self.estimate_values
-            self.output_datafile[self.kriging_variance] = self.variance_values
-            return self.output_datafile
+            self.block_model[self.kriging_estimate] = self.estimate_values
+            self.block_model[self.kriging_variance] = self.variance_values
+            estimate_df = self.block_model.replace(-999.0, np.nan)
+            return GridDatafile(estimate_df, self.grid.get_metadata())
 
-    def save_kriging(self, output_name = ''):
+    def save_kriging(self):
         assert self.kt_status == True, "Please run estimate() first"
-        if output_name == '':
+        if self.output_datafile == '':
             raise OutputNameNotProvidedException("Please provide valid names for output variables")
-        dataframe_to_gslib(self.output_datafile, output_name)
+        dataframe_to_gslib(self.block_model, self.output_datafile)

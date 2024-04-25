@@ -4,3 +4,6 @@
 #   -------------------------------------------------------------
 """Python Package Template"""
 from __future__ import annotations
+from andesite.utils.version import get_static_version
+
+__version__ = get_static_version()

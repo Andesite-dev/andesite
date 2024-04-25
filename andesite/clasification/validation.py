@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import warnings
+warnings.filterwarnings("ignore")
 
 def export_moving_means_cat(
     comp_df,
@@ -27,7 +29,7 @@ def export_moving_means_cat(
         for k in range(n_intervals):
             model_data = model_vals[cum_hist_model[k]:cum_hist_model[k + 1]]
             mask = (model_data != -999.0)
-            model_means_arr[k] = np.mean(model_data[mask])
+            model_means_arr[k] = np.nanmean(model_data[mask])
             model_counts_vals[k] = len(model_data)
         model_cats_means_arr.append(model_means_arr)
         model_cats_counts_vals.append(model_counts_vals)
@@ -41,7 +43,7 @@ def export_moving_means_cat(
     comp_counts_vals = np.zeros(n_intervals)
     for k in range(n_intervals):
         comp_data = comp_vals[cum_hist_comp[k]:cum_hist_comp[k + 1]]
-        comp_means_arr[k] = np.mean(comp_data)
+        comp_means_arr[k] = np.nanmean(comp_data)
         comp_counts_vals[k] = len(comp_data)
     swath_df = pd.DataFrame({
         'intervals': axis_coord,
@@ -67,10 +69,10 @@ def export_moving_means_cat(
                 'color': '#d0786e',
             },
             text=swath_df['composites_counts'],
-            hovertemplate= "Vista: %{x}<br>" +
-            "RQD: %{y}<br>" +
-            "Cantidad datos: %{text:,.0f}" +
-            "<extra></extra>"
+            hovertemplate= "Plane: %{x}<br>" +
+            f"{comp_var_col}" + ": %{y}<br>" +
+            "Data count: %{text:,.0f}" +
+            "<extra></extra>",
     )
     for i in range(3):
         fig.add_trace(go.Scatter(
@@ -81,8 +83,8 @@ def export_moving_means_cat(
                 line = {
                     'color': cat_colors[i],
                 },
-                hovertemplate= "Vista: %{x}<br>" +
-                "RQD: %{y}<br>" +
+                hovertemplate= "Plane: %{x}<br>" +
+                f"{comp_var_col}" + ": %{y}<br>" +
                 "<extra></extra>"
         ), secondary_y = False)
     fig3 = go.Bar(
@@ -101,22 +103,18 @@ def export_moving_means_cat(
         height=550,
         margin=dict(l=30, r=20, t=40, b=30),
         title={
-            'text': f'Medias condicionales {title}'
+            'text': f'Conditional means {title}'
         },
         xaxis={
-            'title': f'Coordenadas eje {model_plane_col}',
-            'range': [swath_df['intervals'].min(), swath_df['intervals'].max()]
+            'title': f'Coordinates {model_plane_col} axis',
+            'range': [axis_coord[0], axis_coord[-1]]
         },
         yaxis={
-            'title': 'RQD (%)',
-            'range': [0, 100],
-            'tick0': 0,
-            'dtick': 10,
-            'ticksuffix': '%'
+            'title': f'{comp_var_col}',
         },
         yaxis2={
             'showgrid': False,
-            'title': 'Cantidad de datos de composito'
+            'title': 'Total composite samples'
         }
     )
     if export:
@@ -140,10 +138,10 @@ def export_moving_means(comp_df, model_df, model_plane_col, model_var_col, comp_
     for k in range(n_intervals):
         model_data = model_vals[cum_hist_model[k]:cum_hist_model[k + 1]]
         comp_data = comp_vals[cum_hist_comp[k]:cum_hist_comp[k + 1]]
-        comp_means_arr[k] = np.mean(comp_data)
+        comp_means_arr[k] = np.nanmean(comp_data)
         comp_counts_vals[k] = len(comp_data)
         mask = (model_data != -999.0)
-        model_means_arr[k] = np.mean(model_data[mask])
+        model_means_arr[k] = np.nanmean(model_data[mask])
         model_counts_vals[k] = len(model_data)
     swath_df = pd.DataFrame({
         'intervals': axis_coord,
@@ -155,37 +153,37 @@ def export_moving_means(comp_df, model_df, model_plane_col, model_var_col, comp_
     swath_df = swath_df.fillna(method='ffill')
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig1 = go.Scatter(
-            x=swath_df['intervals'], 
-            y=swath_df['composites'], 
+            x=swath_df['intervals'],
+            y=swath_df['composites'],
             name='Compositos',
             mode='markers+lines',
             line = {
                 'color': '#d0786e',
             },
             text=swath_df['composites_counts'],
-            hovertemplate= "Vista: %{x}<br>" +
-            "RQD: %{y}<br>" +
-            "Cantidad datos: %{text:,.0f}" +
+            hovertemplate= "Plane: %{x}<br>" +
+            f"{comp_var_col}" + ": %{y}<br>" +
+            "Data count: %{text:,.0f}" +
             "<extra></extra>"
     )
     fig2 = go.Scatter(
-            x=swath_df['intervals'], 
+            x=swath_df['intervals'],
             y=swath_df['model'],
-            name='Modelo',
+            name='Model',
             mode='markers+lines',
             line = {
                 'color': '#42bbac',
             },
             text=swath_df['model_counts'],
-            hovertemplate= "Vista: %{x}<br>" +
-            "RQD: %{y}<br>" +
-            "Cantidad datos: %{text:,.0f}" +
+            hovertemplate= "Plane: %{x}<br>" +
+            f"{comp_var_col}" + ": %{y}<br>" +
+            "Data count: %{text:,.0f}" +
             "<extra></extra>"
     )
     fig3 = go.Bar(
-        x = swath_df['intervals'], 
+        x = swath_df['intervals'],
         y = swath_df['composites_counts'],
-        name = 'N° compositos',
+        name = 'N° composites',
         marker_color = '#d0786e',
         showlegend = True,
         opacity = 0.5,
@@ -199,22 +197,18 @@ def export_moving_means(comp_df, model_df, model_plane_col, model_var_col, comp_
         height=550,
         margin=dict(l=30, r=20, t=50, b=30),
         title={
-            'text': f'Medias condicionales {title}'
+            'text': f'Conditional means {title}'
         },
         xaxis={
-            'title': f'Coordenadas eje {model_plane_col}',
+            'title': f'Coordinates {model_plane_col} axis',
             'range': [axis_coord[0], axis_coord[-1]]
         },
         yaxis={
-            'title': 'RQD (%)',
-            'range': [0, 100],
-            'tick0': 0,
-            'dtick': 10,
-            'ticksuffix': '%'
+            'title': f'{comp_var_col}',
         },
         yaxis2={
             'showgrid': False,
-            'title': 'Cantidad de datos de composito'
+            'title': 'Total composite samples'
         }
     )
     if export:

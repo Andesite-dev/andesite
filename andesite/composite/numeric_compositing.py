@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
-from andesite.utils.log import andes_logger
 from icecream import ic
 
 def one_drill_numeric(dataframe, hole_id_col: str, hole_id: str, from_col: str, to_col, var_col: str, comp_length):

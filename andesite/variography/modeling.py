@@ -365,6 +365,6 @@ class VariogramModeling:
             )
         )
         if export:
-            fig.write_html(f'modeling-{self.experimental_dirs[0, 0]}-{self.experimental_dirs[0, 1]}.html')
+            fig.write_html(f'modeling-{self.experimental_dirs[0][0]}-{self.experimental_dirs[0][1]}.html')
         return fig
 

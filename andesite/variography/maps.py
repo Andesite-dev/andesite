@@ -16,7 +16,7 @@ from icecream import ic
 
 class VarMap:
 
-    def __init__(self, input_drillholes, coordinates, input_grades, plane, n_directions, lag_count, lag_size, out_file):
+    def __init__(self, input_drillholes, coordinates, input_grades, plane, n_directions, lag_count, lag_size, out_file=None):
         self.input_drillholes_path = input_drillholes
         self.coordinates = coordinates
         self.input_grades = input_grades
