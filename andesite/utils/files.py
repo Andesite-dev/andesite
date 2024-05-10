@@ -80,7 +80,7 @@ def read_file_from_gslib(
     dataframe = dd.read_csv(datafile, delimiter=r"\s+", skiprows=n_cols+2, names=columns)
     return dataframe
 
-def dataframe_to_gslib(df: Union[pd.DataFrame, pl.DataFrame], output_filename: str):
+def dataframe_to_gslib(df: Union[pd.DataFrame, pl.DataFrame, dd.DataFrame], output_filename: str):
     """
     Converts a Pandas or Polars DataFrame to a GSLIB-formatted file.
 
@@ -104,7 +104,12 @@ def dataframe_to_gslib(df: Union[pd.DataFrame, pl.DataFrame], output_filename: s
     replaced with 'NONE'.
     """
     # TODO examples
-    dataframe = pl.DataFrame(df)
+    if isinstance(df, dd.DataFrame):
+        dataframe = pl.DataFrame(df.compute())
+    elif isinstance(df, pd.DataFrame):
+        dataframe = pl.DataFrame(df)
+    else:
+        dataframe = df
     cols = dataframe.columns
     header = f"{output_filename}\n{len(cols)}\n" + "\n".join(cols)
     first_line = " ".join(cols)

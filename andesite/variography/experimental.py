@@ -136,7 +136,7 @@ class Variogram:
         if "GAMV Version: 3.000 Finished" in output_str:
             return
         else:
-            raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {parameters}')
+            raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {parameters}\n{output_str}')
 
     def single_semivariogram(self, stand_sills: bool = False) -> VariogramDatafile:
         self.metadata.update({
