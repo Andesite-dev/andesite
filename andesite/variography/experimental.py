@@ -98,7 +98,7 @@ class Variogram:
                     ]
                 })
             f.writelines(lines)
-        # print(f'{self.fmt_params_path} created sucessfully!')
+        print(f'{self.fmt_params_path} created sucessfully!')
 
     def gamv_formatted_elipsoid(self, gamv_file):
         with open(gamv_file, 'r') as f:
@@ -153,8 +153,7 @@ class Variogram:
         self.metadata.update({
             'vartype': 'single'
         })
-        self.clear()
-        return VariogramDatafile(variogram=df.iloc[1:], parameters=self.metadata)
+        return VariogramDatafile(variogram=df, parameters=self.metadata)
 
     def elipsoid_variogram(self, stand_sills: bool = False) -> VariogramDatafile:
         self.metadata.update({
@@ -175,8 +174,7 @@ class Variogram:
         self.metadata.update({
             'vartype': 'elipsoid'
         })
-        # self.clear()
-        return VariogramDatafile(variogram=pd.concat([df_1, df_2, df_3], axis=1).iloc[1:], parameters=self.metadata)
+        return VariogramDatafile(variogram=pd.concat([df_1, df_2, df_3], axis=1), parameters=self.metadata)
 
 
     def plot(self, variogram_dataframe, show_pairs=False, export=False):
