@@ -27,8 +27,9 @@ extdrift.dat                     -gridded file with drift/mean
 2    0.06                        -nst, nugget effect
 1    0.18  0.0   0.0   0.0       -it,cc,ang1,ang2,ang3
          100.0  100.0  100.0     -a_hmax, a_hmin, a_vert
-2    0.20  0.0   0.0   0.0       -it,cc,ang1,ang2,ang3
-         40.0  40.0  99999       -a_hmax, a_hmin, a_vert
+
+
+
 
 
 

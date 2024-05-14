@@ -35,14 +35,13 @@ class KrigingExecutor:
         variogram model types
         1: spherical
         2: exponential
-        3: cubic
-        4: Gaussian
+        3: Gaussian
         """
         angles = variogram_structures['angles']
         directions = variogram_structures['ranges']
         sill = variogram_structures['sill']
         model = variogram_structures['type']
-        model_idx = 1 if model=='Spherical' else (2 if model=='Exponential' else 4)
+        model_idx = 1 if model=='Spherical' else (2 if model=='Exponential' else 3)
         angles_fmt = f'{model_idx}    {sill}  {angles[0]}   {angles[1]}   {angles[2]}       -it,cc,ang1,ang2,ang3\n'
         directions_fmt = f'         {directions[0]}  {directions[1]}  {directions[2]}     -a_hmax, a_hmin, a_vert\n'
         return angles_fmt, directions_fmt
