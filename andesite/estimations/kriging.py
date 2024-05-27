@@ -91,6 +91,18 @@ class KrigingExecutor:
                 angles, directions = self.grab_varmodel_params(self.variogram_structs[i])
                 lines[27 + i*2] = angles
                 lines[28 + i*2] = directions
+
+            if self.n_structs == 1:
+                lines[26] = f'2    {self.variogram_nugget}                        -nst, nugget effect\n'
+                sill = np.float32(self.variogram_structs[0]['sill'])
+                model = self.variogram_structs[0]['type']
+                model_idx = 1 if model=='Spherical' else (2 if model=='Exponential' else 3)
+                angles = self.variogram_structs[0]['angles']
+                lines[27] = f'{model_idx}    {sill/2:.4f}  {angles[0]}   {angles[1]}   {angles[2]}       -it,cc,ang1,ang2,ang3\n'
+                lines[28] = directions
+                lines[29] = f'{model_idx}    {sill/2:.4f}  {angles[0]}   {angles[1]}   {angles[2]}       -it,cc,ang1,ang2,ang3\n'
+                lines[30] = directions
+
             f.writelines(lines)
 
         print(f'File {self.fmt_params_path} created!')
