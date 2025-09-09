@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from icecream import ic
+from typing import Dict
 from pandas.api.types import is_numeric_dtype
 from andesite.utils.files import read_file_from_gslib
 from .numeric_compositing import one_drill_numeric, one_drill_numeric_multi
@@ -20,20 +21,28 @@ from andesite.utils._globals import (
 )
 
 class DatafileFactory:
-    def __init__(self, path):
-        self.path = path
+    def __init__(self, path: str):
+        self.path: str = path
         self.dataframe = self.read()
 
-        self.metadata = {
+        self.metadata: Dict[str, str] = {
             'path': self.path,
         }
 
     def __repr__(self):
         return f"{self.__class__.__name__} instance from {globalize_backslashes(self.path)}"
 
+    @staticmethod
+    def has_bom(filepath: str):
+        # This funcion checks if the file beggins with \ufeff
+        with open(filepath, 'rb') as f:
+            start = f.read(3)
+        return start == b'\xef\xbb\xbf'
+
     def read(self):
         if self.path.endswith('.csv'):
-            return pd.read_csv(self.path)
+            encoding = "utf-8-sig" if self.has_bom(self.path) else "utf-8"
+            return pd.read_csv(self.path, encoding=encoding)
         elif self.path.endswith('.hdf5'):
             return pd.read_hdf(self.path)
         else:
