@@ -133,3 +133,7 @@ dmypy.json
 
 # Pytest data
 tests/data
+
+# Claude
+CLAUDE.md
+.claude/

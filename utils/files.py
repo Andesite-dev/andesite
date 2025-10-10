@@ -25,10 +25,20 @@ def grab_n_cols(
         Number of columns in the file.
     """
     # TODO examples
-    with open(datafile) as file:
-        for line in islice(file, 1, 2):
-            n_cols = line.strip().split()
-            return np.int32(n_cols[0])
+    print(f"[DEBUG grab_n_cols] Reading file: {datafile}")
+    try:
+        with open(datafile, encoding='utf-8', errors='replace') as file:
+            for line in islice(file, 1, 2):
+                print(f"[DEBUG grab_n_cols] Line read: {repr(line)}")
+                n_cols = line.strip().split()
+                print(f"[DEBUG grab_n_cols] Split line: {n_cols}")
+                print(f"[DEBUG grab_n_cols] First element: {repr(n_cols[0])}")
+                result = np.int32(n_cols[0])
+                print(f"[DEBUG grab_n_cols] Converted to int32: {result}")
+                return result
+    except Exception as e:
+        print(f"[DEBUG grab_n_cols] ERROR: {type(e).__name__}: {e}")
+        raise
 
 def grab_col_names(
     datafile: Union[str, "PathLike[str]"]
@@ -46,12 +56,21 @@ def grab_col_names(
         Number of columns in the file.
     """
     # TODO examples
+    print(f"[DEBUG grab_col_names] Getting column count...")
     n_cols = grab_n_cols(datafile)
+    print(f"[DEBUG grab_col_names] Number of columns: {n_cols}")
     cols = []
-    with open(datafile) as file:
-        for line in islice(file, 2, n_cols + 2):
-            cols.append(line.strip())
-    return cols
+    print(f"[DEBUG grab_col_names] Reading column names...")
+    try:
+        with open(datafile, encoding='utf-8', errors='replace') as file:
+            for i, line in enumerate(islice(file, 2, n_cols + 2)):
+                print(f"[DEBUG grab_col_names] Column {i}: {repr(line.strip())}")
+                cols.append(line.strip())
+        print(f"[DEBUG grab_col_names] Columns: {cols}")
+        return cols
+    except Exception as e:
+        print(f"[DEBUG grab_col_names] ERROR: {type(e).__name__}: {e}")
+        raise
 
 def read_file_from_gslib(
     datafile: Union[str, "PathLike[str]"]
@@ -123,7 +142,7 @@ def dataframe_to_gslib(df: Union[pd.DataFrame, pl.DataFrame, dd.DataFrame], outp
             dataframe = dataframe.with_columns(pl.col(c).fill_null('NONE').alias(c))
     dataframe.write_csv(output_filename, separator=' ')
     time.sleep(0.01)
-    with open(output_filename, 'r+') as f:
+    with open(output_filename, 'r+', encoding='utf-8', errors='replace') as f:
         line = next(f)
         f.seek(0)
         f.write(line.replace(line, header))
@@ -136,12 +155,22 @@ def check_nan_values(dataframe):
         print(f'In the column {c} there are {null_values_count} null values ({percentage_null:.2f})%')
 
 def grab_index_coordinates(drillholes_datafile, coord_names):
-    dframe = read_file_from_gslib(drillholes_datafile)
-    variables = dframe.columns
-    ix = variables.get_loc(coord_names[0]) + 1
-    iy = variables.get_loc(coord_names[1]) + 1
-    iz = variables.get_loc(coord_names[2]) + 1
-    return ix, iy, iz
+    print(f"[DEBUG grab_index_coordinates] Datafile path: {drillholes_datafile}")
+    print(f"[DEBUG grab_index_coordinates] Coordinate names: {coord_names}")
+    try:
+        dframe = read_file_from_gslib(drillholes_datafile)
+        print(f"[DEBUG grab_index_coordinates] Dataframe loaded, columns: {dframe.columns.tolist()}")
+        variables = dframe.columns
+        ix = variables.get_loc(coord_names[0]) + 1
+        print(f"[DEBUG grab_index_coordinates] ix (for {coord_names[0]}): {ix}")
+        iy = variables.get_loc(coord_names[1]) + 1
+        print(f"[DEBUG grab_index_coordinates] iy (for {coord_names[1]}): {iy}")
+        iz = variables.get_loc(coord_names[2]) + 1
+        print(f"[DEBUG grab_index_coordinates] iz (for {coord_names[2]}): {iz}")
+        return ix, iy, iz
+    except Exception as e:
+        print(f"[DEBUG grab_index_coordinates] ERROR: {type(e).__name__}: {e}")
+        raise
 
 def grab_index_target(drillholes_datafile, target):
     dframe = read_file_from_gslib(drillholes_datafile)
