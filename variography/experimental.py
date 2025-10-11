@@ -133,7 +133,7 @@ class Variogram:
         CREATE_NO_WINDOW = 0x08000000
         output = subprocess.check_output([globalize_backslashes(os.path.join(current_dir, '../utils/bin/gamv_OpenMP.exe')), f'{parameters}'], creationflags=CREATE_NO_WINDOW)
         output_str = output.decode("utf-8")
-        if "GAMV Version: 3.000 Finished" in output_str:
+        if "GAMV elapsed time:" in output_str:
             return
         else:
             raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {parameters}\n{output_str}')

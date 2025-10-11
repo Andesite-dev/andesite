@@ -158,8 +158,11 @@ class KrigingExecutor:
         params_path, output_path = self.create_kt3d_params(cross_val=True)
         self.kt_status = self.run_kt3d(cross_val=True)
         if self.kt_status:
-            raw_valcru_df = read_file_from_gslib(output_path).compute()
-            valcru_df = raw_valcru_df.replace(-999.0, np.nan)
+            valcru_df = read_file_from_gslib(output_path).compute()
+            valcru_df.rename(columns={'Error:est-true': 'Error'}, inplace=True)
+            valcru_df["StandarizedError"] = (valcru_df["True"] - valcru_df["Estimate"]) / np.sqrt(valcru_df["EstimationVariance"])
+            valcru_df["AbsoluteError"] = np.abs(valcru_df["Error"])
+            # valcru_df = valcru_df.replace(-999.0, np.nan)
             return valcru_df
         else:
             raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {params_path}')
