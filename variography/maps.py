@@ -13,7 +13,6 @@ import plotly.graph_objects as go
 import plotly.express as px
 from icecream import ic
 
-
 class VarMap:
 
     def __init__(self, input_drillholes, coordinates, input_grades, plane, n_directions, lag_count, lag_size, out_file=None):
@@ -126,7 +125,7 @@ class VarMap:
         CREATE_NO_WINDOW = 0x08000000
         output = subprocess.check_output([globalize_backslashes(os.path.join(current_dir, '../utils/bin/gamv_OpenMP.exe')), f'{parameters}'], creationflags=CREATE_NO_WINDOW)
         output_str = output.decode("utf-8")
-        if "GAMV Version: 3.000 Finished" in output_str:
+        if "GAMV Version: 3.100 Finished" in output_str:
             return
         else:
             raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {parameters}')
@@ -207,9 +206,27 @@ class VarMap:
                 os.remove(os.path.join(tempfile.gettempdir(), file))
         os.remove(self.real_path_filename)
 
-    def plot(self, varmap_df, export=False):
+    def plot(self, varmap_df, colorbar_type = 'discrete', title = None, figsize=(700, 650), export=False):
+        """
+        Perform a variographic map plot. To user this plot, several colobar can be used, some of
+        them are:
+        - px.colors.sequential.Jet
+        - px.colors.sequential.Rainbow
+        - px.colors.diverging.Portland
 
-        tickvals = varmap_df['direction'].unique()
+        Parameters
+        ----------
+        varmap_df : pandas.DataFrame
+            Dataframe containing the variogram data
+        colorbar_type : str, optional
+            Type of colorbar to use, can be 'discrete' or 'continuous', by default 'discrete'
+        title : str, optional
+            Title of the plot, by default None
+        export : bool, optional
+            Whether to export the plot, by default False
+        """
+
+        tickvals = np.sort(varmap_df['direction'].unique())
         if self.plane.upper() == 'XY':
             ticktext = tickvals
         else:
@@ -223,13 +240,55 @@ class VarMap:
             rotation = 0
 
         fig = go.Figure()
-        fig.add_trace(go.Barpolar(
-            r = varmap_df['frequency'],
-            marker_colorscale = px.colors.sequential.Jet,
-            theta = varmap_df['direction'],
-            text = [f'Paso: {s}<br>Pares: {p}' for s, p in list(zip(varmap_df['steps'], varmap_df['pairs']))],
-            marker = {
-                'color': varmap_df['variogram'],
+
+        varmap_frequency = varmap_df['frequency']
+        varmap_directions = varmap_df['direction']
+        varmap_values = varmap_df['variogram']
+
+        barpolar_width = tickvals[1] - tickvals[0]
+
+        if colorbar_type == "discrete":
+            cmin = 0
+            cmax = 1.2
+            norm_07 = (0.7 - cmin) / (cmax - cmin)
+            norm_1 = (1.0 - cmin) / (cmax - cmin)
+            colorscale = [
+                [0.0, '#ADDEA5'],
+                [norm_07, '#ADDEA5'],
+                [norm_07, '#FFD684'],
+                [norm_1, '#FFD684'],
+                [norm_1, '#C6294A'],
+                [1.0, '#C6294A']
+            ]
+            center1 = 0.35
+            center2 = 0.85
+            center3 = (1 + cmax) / 2
+            tickvals_colorbar = [center1, center2, center3]
+            ticktext_colorbar = ['0 - 0.7', '0.7 - 1', '> 1']
+
+            barpolar_marker = {
+                'color': varmap_values,
+                'colorbar': {
+                    'title': {
+                        'text': self.input_grades,
+                        'font': {
+                            'size': 16
+                        }
+                    },
+                    'thickness': 28,
+                    'tickvals': tickvals_colorbar,
+                    'ticktext': ticktext_colorbar,
+                    'tickmode': 'array'
+                },
+                'cmin': cmin,
+                'cmax': cmax,
+            }
+        else:
+            cmin = varmap_values.quantile(0.01) #varmap_df[varmap_df['steps'] == lag_size]['variogram'].min(),
+            cmax = varmap_values.quantile(0.99) #varmap_df['variogram'].max()
+
+            barpolar_marker = {
+                'color': varmap_values,
                 'colorbar': {
                     'title': {
                     'text': self.input_grades,
@@ -239,35 +298,43 @@ class VarMap:
                 },
                 'thickness': 28,
                 },
-                'cmin': varmap_df['variogram'].quantile(0.01),#varmap_df[varmap_df['steps'] == lag_size]['variogram'].min(),
-                'cmax': varmap_df['variogram'].quantile(0.99) #varmap_df['variogram'].max()
-            },
-            hovertemplate="Angulo: %{theta}<br>Variogram: %{marker.color:.2f}<br>%{text} <extra></extra>",
+                'cmin': cmin,
+                'cmax': cmax
+            }
+
+        fig.add_trace(go.Barpolar(
+            r = varmap_frequency,
+            theta = varmap_directions,
+            width = barpolar_width,
+            text = [f'Paso: {s}<br>Pares: {p}' for s, p in list(zip(varmap_df['steps'], varmap_df['pairs']))],
+            marker_colorscale = px.colors.sequential.Jet if colorbar_type == "continuous" else colorscale,
+            marker = barpolar_marker,
+            hovertemplate="Angulo: %{theta}<br>Variogram: %{marker.color:.2f}<br>%{text}<extra></extra>",
             showlegend=False
         ))
         fig.update_layout(
-            width = 700,
-            height = 650,
-            title = f'Variographic Map {self.input_grades} plane {self.plane.upper()}',
+            width = figsize[0],
+            height = figsize[1],
+            title = "" if title is None else f'Variographic Map {self.input_grades} plane {self.plane.upper()}',
             font_size = 14,
             legend_font_size = 14,
             polar = {
                 'angularaxis': {
                     'rotation': rotation,
                     'direction': 'clockwise',
-                    'gridcolor': 'white',
-                    'showgrid': False,
+                    'gridcolor': '#858585',
+                    'showgrid': True,
                     'tickvals': tickvals,
-                    'ticktext': ticktext
+                    'ticktext': [f'{r:.0f}°' for r in ticktext]
                 },
                 'radialaxis': {
                     'tickvals' : self.tickvalues,
-                    'ticktext': [f'{d:.1f}' for d in self.tickvalues][:-1],
-                    'gridcolor': 'white',
+                    'ticktext': [f'{d:.1f}°' for d in self.tickvalues][:-1],
+                    'gridcolor': '#858585',
                     'tickfont': {
                         'size': 14,
                         'family': 'Arial Black',
-                        'color': 'red'
+                        'color': 'black'
                     },
                     'angle': 25,
                     'tickangle' : 45,
@@ -276,7 +343,9 @@ class VarMap:
                     'visible': False
                 }
             },
-            template = 'plotly_dark',
+            template = 'plotly_white',
+            paper_bgcolor = 'rgba(0,0,0,0)',
+            plot_bgcolor = 'rgba(0,0,0,0)',
         )
         if export:
             fig.write_html(f"varmap-{self.input_grades}-{self.plane.upper()}.html")
