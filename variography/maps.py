@@ -233,6 +233,7 @@ class VarMap:
             ticktext = [f'-{t}' if t > 0 and t <= 90 else 0.0
                         if t == 0 else '' if t > 90 and t < 270
                         else f'{360 - t}' for t in tickvals]
+        print(ticktext)
 
         if self.plane.upper() == 'XY':
             rotation = 90
@@ -325,7 +326,7 @@ class VarMap:
                     'gridcolor': '#858585',
                     'showgrid': True,
                     'tickvals': tickvals,
-                    'ticktext': [f'{r:.0f}°' for r in ticktext]
+                    'ticktext': ticktext
                 },
                 'radialaxis': {
                     'tickvals' : self.tickvalues,
@@ -343,9 +344,9 @@ class VarMap:
                     'visible': False
                 }
             },
-            template = 'plotly_white',
-            paper_bgcolor = 'rgba(0,0,0,0)',
-            plot_bgcolor = 'rgba(0,0,0,0)',
+            # template = 'plotly_white',
+            # paper_bgcolor = 'rgba(0,0,0,0)',
+            # plot_bgcolor = 'rgba(0,0,0,0)',
         )
         if export:
             fig.write_html(f"varmap-{self.input_grades}-{self.plane.upper()}.html")
