@@ -2,15 +2,10 @@ import os
 import re
 import subprocess
 import tempfile
-import pandas as pd
 import numpy as np
 from andesite.utils.files import grab_index_coordinates, remove_categorical_columns, read_file_from_gslib, dataframe_to_gslib
 from andesite.utils.manipulations import globalize_backslashes
 from itertools import combinations
-import plotly.graph_objects as go
-from icecream import ic
-from ..utils import logger
-
 class CorrelogramTask:
 
     def __init__(self, input_drillholes, coordinates, input_grades, input_ug, params):
@@ -114,41 +109,37 @@ class CorrelogramTask:
             raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {parameters}\n{output_str}')
 
     def calculate(self):
-        try:
-            datafile = remove_categorical_columns(self.input_drillholes_path)
-            unique_ugs = datafile[self.input_ug].unique().tolist()
-            cross_ugs = np.array(list(combinations(unique_ugs, 2)))
+        datafile = remove_categorical_columns(self.input_drillholes_path)
+        unique_ugs = datafile[self.input_ug].unique().tolist()
+        cross_ugs = np.array(list(combinations(unique_ugs, 2)))
 
-            def target_ohe(row, ug):
-                if int(row[self.input_ug]) == int(ug):
-                    return row[self.input_grades]
-                return -999
+        def target_ohe(row, ug):
+            if int(row[self.input_ug]) == int(ug):
+                return row[self.input_grades]
+            return -999
 
-            ug_cols_idx = []
-            for ug_val in unique_ugs:
-                col_name = f'UG{int(ug_val)}_{self.input_grades}'
-                datafile[col_name] = datafile.apply(target_ohe, axis=1, args=(ug_val,))
-                ug_cols_idx.append(str(datafile.columns.get_loc(col_name) + 1))
+        ug_cols_idx = []
+        for ug_val in unique_ugs:
+            col_name = f'UG{int(ug_val)}_{self.input_grades}'
+            datafile[col_name] = datafile.apply(target_ohe, axis=1, args=(ug_val,))
+            ug_cols_idx.append(str(datafile.columns.get_loc(col_name) + 1))
 
-            not_obj_df = datafile.select_dtypes(exclude=['object'])
-            datafile_ug_path = tempfile.NamedTemporaryFile(prefix="drillhole"+'_', suffix=".dat", delete=False)
+        not_obj_df = datafile.select_dtypes(exclude=['object'])
+        datafile_ug_path = tempfile.NamedTemporaryFile(prefix="drillhole"+'_', suffix=".dat", delete=False)
 
-            ug_cols_idx_params = "  ".join(ug_cols_idx)
+        ug_cols_idx_params = "  ".join(ug_cols_idx)
 
-            dataframe_to_gslib(not_obj_df, datafile_ug_path.name)
+        dataframe_to_gslib(not_obj_df, datafile_ug_path.name)
 
-            self.create_params_temp(
-                n_ugs = len(unique_ugs),
-                idx_ugs = ug_cols_idx_params,
-                input_drillholes_path = datafile_ug_path.name,
-                ug_pairs = cross_ugs
-            )
-            self.run_gamv(self.fmt_params_path)
+        self.create_params_temp(
+            n_ugs = len(unique_ugs),
+            idx_ugs = ug_cols_idx_params,
+            input_drillholes_path = datafile_ug_path.name,
+            ug_pairs = cross_ugs
+        )
+        self.run_gamv(self.fmt_params_path)
 
-            correlograms_paths = self.gamv_correlogram_formatted(self.fmt_out_path)
-        except Exception as e:
-            logger.opt(exception=True).log("EXCEPTION", str(e))
-            return
+        correlograms_paths = self.gamv_correlogram_formatted(self.fmt_out_path)
         return correlograms_paths
 
 
