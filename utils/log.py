@@ -1,6 +1,3 @@
-import os
-os.environ['LOGURU_FORMAT'] = '[{time:YYYY-MM-DD HH:mm:ss}][<level>{level}</level>][{module}.py]:<bold>{line}</bold> on {function}: <bold>{message}</bold>'
-
-from loguru import logger
-
-andesite_logger = logger
+"""Logging management - delegates to andes.util.log (single global logger)"""
+from andes.util.log import *  # noqa: F401, F403
+from andes.util.log import logger, get_logger, setup_logging, get_logging_level

@@ -15,7 +15,7 @@ from icecream import ic
 
 class VarMap:
 
-    def __init__(self, input_drillholes, coordinates, input_grades, plane, n_directions, lag_count, lag_size, out_file=None):
+    def __init__(self, input_drillholes, coordinates, input_grades, plane, n_directions, lag_count, lag_size, legend_type, out_file=None):
         self.input_drillholes_path = input_drillholes
         self.coordinates = coordinates
         self.input_grades = input_grades
@@ -24,6 +24,7 @@ class VarMap:
         self.lag_count = lag_count
         self.lag_size = lag_size
         self.out_file = out_file
+        self.legend_type = legend_type
         self.bandh = 999999
         self.bandv = 999999
 
@@ -206,7 +207,7 @@ class VarMap:
                 os.remove(os.path.join(tempfile.gettempdir(), file))
         os.remove(self.real_path_filename)
 
-    def plot(self, varmap_df, colorbar_type = 'discrete', title = None, figsize=(700, 650), export=False):
+    def plot(self, varmap_df, title = None, figsize=(700, 650), export=False):
         """
         Perform a variographic map plot. To user this plot, several colobar can be used, some of
         them are:
@@ -218,7 +219,7 @@ class VarMap:
         ----------
         varmap_df : pandas.DataFrame
             Dataframe containing the variogram data
-        colorbar_type : str, optional
+        legend_type : str, optional
             Type of colorbar to use, can be 'discrete' or 'continuous', by default 'discrete'
         title : str, optional
             Title of the plot, by default None
@@ -248,7 +249,7 @@ class VarMap:
 
         barpolar_width = tickvals[1] - tickvals[0]
 
-        if colorbar_type == "discrete":
+        if self.legend_type == "discrete":
             cmin = 0
             cmax = 1.2
             norm_07 = (0.7 - cmin) / (cmax - cmin)
@@ -308,7 +309,7 @@ class VarMap:
             theta = varmap_directions,
             width = barpolar_width,
             text = [f'Paso: {s}<br>Pares: {p}' for s, p in list(zip(varmap_df['steps'], varmap_df['pairs']))],
-            marker_colorscale = px.colors.sequential.Jet if colorbar_type == "continuous" else colorscale,
+            marker_colorscale = px.colors.sequential.Jet if self.legend_type == "continuous" else colorscale,
             marker = barpolar_marker,
             hovertemplate="Angulo: %{theta}<br>Variogram: %{marker.color:.2f}<br>%{text}<extra></extra>",
             showlegend=False

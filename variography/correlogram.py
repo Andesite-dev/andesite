@@ -9,6 +9,7 @@ from andesite.utils.manipulations import globalize_backslashes
 from itertools import combinations
 import plotly.graph_objects as go
 from icecream import ic
+from ..utils import logger
 
 class CorrelogramTask:
 
@@ -68,10 +69,10 @@ class CorrelogramTask:
             lines[10] = f'{self.azim} {self.atol} {self.bandh} {self.dip} {self.diptol} {self.bandh}   -azm,atol,bandh,dip,dtol,bandv\n'
             lines[11] = f'{int(stand_sills)}                                 -standardize sills? (0=no, 1=yes)\n'
             lines[12] = f'{len(ug_pairs)}                                 -number of variograms\n'
-            for i, ug_pair in enumerate(ug_pairs):
-                lines[13 + i] = f'{ug_pair[0]}   {ug_pair[1]}   4                         -tail var., head var., variogram type\n'
+            lines = lines[:13]
+            for ug_pair in ug_pairs:
+                lines.append(f'{ug_pair[0]}   {ug_pair[1]}   4                         -tail var., head var., variogram type\n')
             f.writelines(lines)
-        ic(self.fmt_params_path)
 
     def gamv_correlogram_formatted(self, gamv_file):
         with open(gamv_file, 'r', encoding='utf-8', errors='replace') as f:
@@ -113,37 +114,41 @@ class CorrelogramTask:
             raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {parameters}\n{output_str}')
 
     def calculate(self):
-        datafile = remove_categorical_columns(self.input_drillholes_path)
-        unique_ugs = datafile[self.input_ug].unique().tolist()
-        cross_ugs = np.array(list(combinations(unique_ugs, 2)))
+        try:
+            datafile = remove_categorical_columns(self.input_drillholes_path)
+            unique_ugs = datafile[self.input_ug].unique().tolist()
+            cross_ugs = np.array(list(combinations(unique_ugs, 2)))
 
-        def target_ohe(row, ug):
-            if int(row[self.input_ug]) == int(ug):
-                return row[self.input_grades]
-            return -999
+            def target_ohe(row, ug):
+                if int(row[self.input_ug]) == int(ug):
+                    return row[self.input_grades]
+                return -999
 
-        ug_cols_idx = []
-        for ug_val in unique_ugs:
-            col_name = f'UG{int(ug_val)}_{self.input_grades}'
-            datafile[col_name] = datafile.apply(target_ohe, axis=1, args=(ug_val,))
-            ug_cols_idx.append(str(datafile.columns.get_loc(col_name) + 1))
+            ug_cols_idx = []
+            for ug_val in unique_ugs:
+                col_name = f'UG{int(ug_val)}_{self.input_grades}'
+                datafile[col_name] = datafile.apply(target_ohe, axis=1, args=(ug_val,))
+                ug_cols_idx.append(str(datafile.columns.get_loc(col_name) + 1))
 
-        not_obj_df = datafile.select_dtypes(exclude=['object'])
-        datafile_ug_path = tempfile.NamedTemporaryFile(prefix="drillhole"+'_', suffix=".dat", delete=False)
+            not_obj_df = datafile.select_dtypes(exclude=['object'])
+            datafile_ug_path = tempfile.NamedTemporaryFile(prefix="drillhole"+'_', suffix=".dat", delete=False)
 
-        ug_cols_idx_params = "  ".join(ug_cols_idx)
+            ug_cols_idx_params = "  ".join(ug_cols_idx)
 
-        dataframe_to_gslib(not_obj_df, datafile_ug_path.name)
+            dataframe_to_gslib(not_obj_df, datafile_ug_path.name)
 
-        self.create_params_temp(
-            n_ugs = len(unique_ugs),
-            idx_ugs = ug_cols_idx_params,
-            input_drillholes_path = datafile_ug_path.name,
-            ug_pairs = cross_ugs
-        )
-        self.run_gamv(self.fmt_params_path)
+            self.create_params_temp(
+                n_ugs = len(unique_ugs),
+                idx_ugs = ug_cols_idx_params,
+                input_drillholes_path = datafile_ug_path.name,
+                ug_pairs = cross_ugs
+            )
+            self.run_gamv(self.fmt_params_path)
 
-        correlograms_paths = self.gamv_correlogram_formatted(self.fmt_out_path)
+            correlograms_paths = self.gamv_correlogram_formatted(self.fmt_out_path)
+        except Exception as e:
+            logger.opt(exception=True).log("EXCEPTION", str(e))
+            return
         return correlograms_paths
 
 
