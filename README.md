@@ -168,6 +168,24 @@ See `LICENSE.txt` for license information.
 - Website: http://www.andesite.cl/
 - Email: soporte@andesite.cl
 
+## Building a Wheel Distribution
+
+To build a `.whl` file for distribution and local installation:
+
+```bash
+python setup.py bdist_wheel
+```
+
+The output file will be placed in the `dist/` directory (e.g., `dist/andesite-*.whl`).
+
+To install it locally:
+
+```bash
+pip install dist/andesite-*.whl
+```
+
+> **Note:** Requires the `wheel` package (`pip install wheel`).
+
 ---
 
 *Andesite - Professional geostatistical software for mining resource estimation*
