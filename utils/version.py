@@ -70,6 +70,23 @@ def write_release_version(version):
     f.close()
 
 
+def _normalize_version(version: str) -> str:
+    """Convert git describe output to a PEP 440 compliant version string.
+
+    Examples:
+        v0.9.2        -> 0.9.2       (exact tag)
+        v0.9.2-1-gc895 -> 0.9.2.post1  (N commits past tag)
+    """
+    # Strip leading 'v'
+    version = version.lstrip('v')
+    # Convert '-N-gHASH' suffix to '.postN'
+    parts = version.split('-')
+    if len(parts) == 3:
+        base, n_commits, _git_hash = parts
+        version = f"{base}.post{n_commits}"
+    return version
+
+
 def get_git_version(abbrev=4):
     # Read in the version that's currently in RELEASE-VERSION.
 
@@ -89,6 +106,8 @@ def get_git_version(abbrev=4):
 
     if version is None:
         raise ValueError("Cannot find the version number!")
+
+    version = _normalize_version(version)
 
     # If the current version is different from what's in the
     # RELEASE-VERSION file, update the file to be current.
