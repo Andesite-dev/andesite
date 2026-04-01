@@ -80,7 +80,7 @@ def read_file_from_gslib(
     # Collect the columns into a list
     col_names = grab_col_names(datafile)
     # Shrink the column names
-    columns = [c.strip().replace(' ', '') for c in col_names]
+    columns = [c.strip().strip('\x00').replace(' ', '') for c in col_names]
     n_cols = len(col_names)
     dataframe = dd.read_csv(datafile, delimiter=r"\s+", skiprows=n_cols+2, names=columns)
     return dataframe
@@ -166,6 +166,16 @@ def remove_categorical_columns(filepath):
         df = read_file_from_gslib(filepath)
     not_obj_df = df.select_dtypes(exclude=['object'])
     return not_obj_df
+
+
+def load_datafile(filepath):
+    """Load a datafile without filtering columns by dtype."""
+    if filepath.endswith('.csv'):
+        return pd.read_csv(filepath)
+    elif filepath.endswith('.hdf5'):
+        return pd.read_hdf(filepath)
+    else:
+        return read_file_from_gslib(filepath).compute()
 
 def transform_datafile_to_gslib(filepath):
     """Transform a datafile in diferent formats, into a gslib file, save it on a Temp file

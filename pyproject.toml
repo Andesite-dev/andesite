@@ -1,0 +1,160 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=80", "wheel"]
+
+[project]
+authors = [{name = "ANDESITE SpA", email = "axel.troncoso@andesite.cl"}]
+dependencies = [
+  # Data processing
+  "numpy==1.26.1", # pinned — compiled-extension chain not yet validated for numpy 2.x
+  "pandas>=2.3.1",
+  "polars>=1.31.0",
+  "pyarrow>=21.0.0", # polars Arrow backend
+  "dask[dataframe]>=2024.8.0",
+  "cloudpickle>=3.0.0", # dask serialization
+  # Numerical / statistics
+  "scipy>=1.13.1",
+  "scikit-learn>=1.6.1", # Visualisation
+  "plotly>=6.2.0", # Utilities
+  "loguru>=0.7.3",
+  "icecream>=2.1.5",
+  "PyYAML>=6.0",
+  "tenacity>=9.1.2",
+  "pytz>=2026.1.post1",
+]
+description = "Geostatistical analysis and mining estimation software"
+keywords = [
+  "geostatistics",
+  "mining",
+  "estimation",
+  "kriging",
+  "variography",
+  "compositing",
+  "resource-modeling",
+]
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE.txt"]
+name = "andesite"
+readme = "README.md"
+requires-python = ">=3.12.10"
+urls = {homepage = "http://www.andesite.cl/"}
+version = "0.9.3"
+
+[dependency-groups]
+tests = [
+  "pytest>=8.4.1",
+  "pytest-cov>=6.0.0",
+]
+
+[tool.uv]
+default-groups = ["tests"]
+
+# ── Ruff ──────────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+src = ["."]
+target-version = "py312"
+
+[tool.ruff.lint]
+ignore = [
+  "ANN401", # Dynamically typed expressions (Any) — used throughout
+  "S101", # assert — needed for internal validation
+  "N818", # Exception name suffix — existing public API; mass-rename is a separate PR
+]
+select = [
+  "E", # pycodestyle errors
+  "W", # pycodestyle warnings
+  "F", # Pyflakes
+  "I", # isort
+  "B", # flake8-bugbear
+  "C4", # flake8-comprehensions
+  "UP", # pyupgrade
+  "ARG", # flake8-unused-arguments
+  "SIM", # flake8-simplify
+  "N", # pep8-naming
+  "RUF", # Ruff-specific rules
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/conftest.py" = []
+"tests/**" = ["S101", "S105", "S106", "S108", "S110", "ARG", "E712", "F841", "E501", "B015", "B017", "N802", "SIM102", "B007"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["andesite"]
+
+[tool.ruff.format]
+indent-style = "space"
+quote-style = "double"
+
+[tool.mypy]
+disallow_untyped_defs = false
+ignore_missing_imports = true # numpy/scipy/polars stubs incomplete; vtk/mayavi have none
+python_version = "3.12"
+strict = false
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+addopts = [
+  "-v",
+  "--tb=short",
+  "--strict-markers",
+  "--cov=.",
+  "--cov-report=term-missing",
+  "--cov-report=html",
+  "--cov-fail-under=5",
+]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+  "ignore::PendingDeprecationWarning",
+]
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "integration: marks tests as integration tests",
+]
+python_classes = ["Test*"]
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+omit = [
+  "*/tests/*",
+  "*/conftest.py",
+  "*/__pycache__/*",
+  "*/site-packages/*",
+  "build/*",
+  "setup.py",
+]
+relative_files = true
+source = ["."]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.bandit]
+# B101 assert_used — needed for internal validation
+# B105/B106 hardcoded_password_* — false positives on form-reset variables
+# B311 random — Monte Carlo simulation, not cryptography
+# B404/B603/B607 subprocess — used only for `git describe` version detection
+skips = ["B101", "B105", "B106", "B311", "B404", "B603", "B607"]
+
+[tool.setuptools]
+package-dir = {"andesite" = "."}
+packages = [
+  "andesite",
+  "andesite.analisis",
+  "andesite.clasification",
+  "andesite.composite",
+  "andesite.datafiles",
+  "andesite.estimations",
+  "andesite.tests",
+  "andesite.utils",
+  "andesite.utils.bin",
+  "andesite.variography",
+]
+
+[tool.setuptools.package-data]
+andesite = ["utils/bin/*"]

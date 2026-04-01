@@ -2,8 +2,7 @@ import os
 import re
 import subprocess
 import tempfile
-import numpy as np
-from andesite.utils.files import grab_index_coordinates, remove_categorical_columns, read_file_from_gslib, dataframe_to_gslib
+from andesite.utils.files import grab_index_coordinates, load_datafile, read_file_from_gslib, dataframe_to_gslib
 from andesite.utils.manipulations import globalize_backslashes
 from itertools import combinations
 class CorrelogramTask:
@@ -61,7 +60,7 @@ class CorrelogramTask:
             lines[6] = f'{int(self.lag_count)}                                - number of lags\n'
             lines[7] = f'{self.lag_size}                               - lag separation distance\n'
             lines[8] = f'{self.lag_tol}                              -lag tolerance\n'
-            lines[10] = f'{self.azim} {self.atol} {self.bandh} {self.dip} {self.diptol} {self.bandh}   -azm,atol,bandh,dip,dtol,bandv\n'
+            lines[10] = f'{self.azim} {self.atol} {self.bandh} {self.dip} {self.diptol} {self.bandv}   -azm,atol,bandh,dip,dtol,bandv\n'
             lines[11] = f'{int(stand_sills)}                                 -standardize sills? (0=no, 1=yes)\n'
             lines[12] = f'{len(ug_pairs)}                                 -number of variograms\n'
             lines = lines[:13]
@@ -109,9 +108,9 @@ class CorrelogramTask:
             raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {parameters}\n{output_str}')
 
     def calculate(self):
-        datafile = remove_categorical_columns(self.input_drillholes_path)
+        datafile = load_datafile(self.input_drillholes_path)
         unique_ugs = datafile[self.input_ug].unique().tolist()
-        cross_ugs = np.array(list(combinations(unique_ugs, 2)))
+        cross_ugs = list(combinations(range(1, len(unique_ugs) + 1), 2))
 
         def target_ohe(row, ug):
             if int(row[self.input_ug]) == int(ug):

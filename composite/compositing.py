@@ -80,7 +80,7 @@ class Assay(object):
         self.datetime_columns: List[str] = []
         for c in self.dataframe.columns:
             if isinstance(self.dataframe, pl.DataFrame):
-                unique_samples = self.dataframe[c].unique().count()
+                unique_samples = self.dataframe[c].n_unique()
                 dtype = self.dataframe[c].dtype
                 if dtype in DATETIME_DTYPES_POLARS:
                     self.datetime_columns.append(c)
