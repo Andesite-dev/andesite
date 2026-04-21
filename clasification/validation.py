@@ -56,14 +56,14 @@ def export_moving_means_cat(
         'model_3': model_cats_means_arr[2],
         'model_counts_3': model_cats_counts_vals[2]
     })
-    swath_df = swath_df.fillna(method='ffill')
+    swath_df = swath_df.ffill()
     cat_colors = ['green', 'yellow', 'red']
     cat_text = ['Medido', 'Indicado', 'Inferido']
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig1 = go.Scatter(
             x=swath_df['intervals'],
             y=swath_df['composites'],
-            name='Compositos',
+            name='Composites',
             mode='markers+lines',
             line = {
                 'color': '#d0786e',
@@ -90,7 +90,7 @@ def export_moving_means_cat(
     fig3 = go.Bar(
         x = swath_df['intervals'],
         y = swath_df['composites_counts'],
-        name = 'N° compositos',
+        name = 'Composites',
         marker_color = '#d0786e',
         showlegend = True,
         opacity = 0.35,
@@ -99,9 +99,9 @@ def export_moving_means_cat(
     fig.add_trace(fig1, secondary_y = False)
     fig.add_trace(fig3, secondary_y = True)
     fig.update_layout(
-        width=1000,
-        height=550,
-        margin=dict(l=30, r=20, t=40, b=30),
+        autosize=True,
+        template="plotly_white",
+        margin={"l": 40, "r": 20, "t": 50, "b": 80},
         title={
             'text': f'Conditional means {title}'
         },
@@ -121,7 +121,7 @@ def export_moving_means_cat(
         fig.write_html(f"conditional-means-cat-{model_plane_col}.html")
     return fig
 
-def export_moving_means(comp_df, model_df, model_plane_col, model_var_col, comp_plane_col, comp_var_col, n_intervals, title, export=False):
+def export_moving_means(comp_df, model_df, model_plane_col, model_var_col, comp_plane_col, comp_var_col, n_intervals, title, export=False, color_composites="#d0786e", color_model="#42bbac", color_bar=None):
     hist_coord_model, model_bins = np.histogram(model_df[model_plane_col], n_intervals)
     hist_coord_comp, _ = np.histogram(comp_df[comp_plane_col], bins=model_bins)
     axis_coord = np.round([(model_bins[i] + model_bins[i + 1]) / 2 for i in range(n_intervals)], 2)
@@ -150,15 +150,22 @@ def export_moving_means(comp_df, model_df, model_plane_col, model_var_col, comp_
         'model': model_means_arr,
         'model_counts': model_counts_vals
     })
-    swath_df = swath_df.fillna(method='ffill')
+    swath_df = swath_df.ffill()
+    if color_bar is None:
+        color_bar = color_composites
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig1 = go.Scatter(
             x=swath_df['intervals'],
             y=swath_df['composites'],
-            name='Compositos',
+            name='Composites',
             mode='markers+lines',
+            marker={
+                "size": 10,
+                "color": color_composites,
+            },
             line = {
-                'color': '#d0786e',
+                'color': color_composites,
+                "width": 4,
             },
             text=swath_df['composites_counts'],
             hovertemplate= "Plane: %{x}<br>" +
@@ -171,8 +178,13 @@ def export_moving_means(comp_df, model_df, model_plane_col, model_var_col, comp_
             y=swath_df['model'],
             name='Model',
             mode='markers+lines',
+            marker={
+                "size": 10,
+                "color": color_model,
+            },
             line = {
-                'color': '#42bbac',
+                'color': color_model,
+                "width": 4,
             },
             text=swath_df['model_counts'],
             hovertemplate= "Plane: %{x}<br>" +
@@ -184,9 +196,9 @@ def export_moving_means(comp_df, model_df, model_plane_col, model_var_col, comp_
         x = swath_df['intervals'],
         y = swath_df['composites_counts'],
         name = 'N° composites',
-        marker_color = '#d0786e',
+        marker_color = color_bar,
         showlegend = True,
-        opacity = 0.5,
+        opacity = 0.4,
         hoverinfo = 'none'
     )
     fig.add_trace(fig1, secondary_y = False)

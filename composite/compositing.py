@@ -161,7 +161,7 @@ class Assay(object):
                 "TO": comp_to,
             })
 
-        comp_vars = np.full((n_comp, n_vars), np.nan, dtype="<U16")  # Result matrix for all variables
+        comp_vars = np.full((n_comp, n_vars), "NULL", dtype="<U16")  # Result matrix for all variables
         drill_variables = np.stack([df[var].to_numpy() for var in self.assay_categorical_cols], axis=1)
 
         for icomp in range(n_comp):
@@ -176,7 +176,7 @@ class Assay(object):
             values = drill_variables[~mask]
 
             result = (
-                np.full((1, len(self.assay_categorical_cols)), np.nan)
+                np.full((1, len(self.assay_categorical_cols)), "NULL", dtype="<U16")
                 if np.size(weights) == 0
                 else self.__most_frequent_category(weights, values)
             )
@@ -395,8 +395,8 @@ class DrillholesCampaign(object):
                 if joined_df[c].dtype in NUMERIC_DTYPES_POLARS
             ])
             .with_columns([
-                pl.when(pl.col(c) == "nan")
-                .then(None)
+                pl.when(pl.col(c).is_in(["nan", "NULL"]))
+                .then(pl.lit("NULL"))
                 .otherwise(pl.col(c))
                 .alias(c)
                 for c in joined_df.columns

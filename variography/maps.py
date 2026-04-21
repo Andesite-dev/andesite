@@ -311,13 +311,13 @@ class VarMap:
             text = [f'Paso: {s}<br>Pares: {p}' for s, p in list(zip(varmap_df['steps'], varmap_df['pairs']))],
             marker_colorscale = px.colors.sequential.Jet if self.legend_type == "continuous" else colorscale,
             marker = barpolar_marker,
-            hovertemplate="Angulo: %{theta}<br>Variogram: %{marker.color:.2f}<br>%{text}<extra></extra>",
+            hovertemplate="Direction: %{theta}<br>Variogram: %{marker.color:.2f}<br>%{text}<extra></extra>",
             showlegend=False
         ))
         fig.update_layout(
             width = figsize[0],
             height = figsize[1],
-            title = "" if title is None else f'Variographic Map {self.input_grades} plane {self.plane.upper()}',
+            title = f'Variographic Map {self.input_grades} plane {self.plane.upper()}',
             font_size = 14,
             legend_font_size = 14,
             polar = {
@@ -346,8 +346,6 @@ class VarMap:
                 }
             },
             # template = 'plotly_white',
-            # paper_bgcolor = 'rgba(0,0,0,0)',
-            # plot_bgcolor = 'rgba(0,0,0,0)',
         )
         if export:
             fig.write_html(f"varmap-{self.input_grades}-{self.plane.upper()}.html")
