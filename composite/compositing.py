@@ -1,4 +1,5 @@
 from functools import reduce
+from pathlib import Path
 import polars as pl
 from typing import Optional, Union, Set, List, Any, Tuple, Literal
 import numpy as np
@@ -15,6 +16,62 @@ from ..utils._typing import (
     Float,
     Bool
 )
+
+
+class DrillholeError(Exception):
+    """Base exception for drillhole data errors."""
+
+
+class DrillholeCSVError(DrillholeError):
+    """Raised when a CSV file cannot be parsed."""
+
+
+class DrillholeValidationError(DrillholeError):
+    """Raised when loaded drillhole data fails validation."""
+
+
+_NULL_TOKENS = ["NULL", "null", "NA", "na", "N/A", "n/a", ""]
+
+
+def _read_csv(path: str, schema_overrides: Optional[dict] = None) -> pl.DataFrame:
+    file_name = Path(path).name
+    try:
+        df = pl.read_csv(
+            path,
+            null_values=_NULL_TOKENS,
+            infer_schema_length=None,
+            schema_overrides=schema_overrides,
+        )
+    except pl.exceptions.ComputeError as e:
+        raise DrillholeCSVError(
+            f"Could not parse '{file_name}': {e}"
+        ) from e
+    str_cols = [c for c, t in zip(df.columns, df.dtypes) if t in STRING_DTYPES_POLARS]
+    if str_cols:
+        df = df.with_columns([pl.col(c).str.strip_chars() for c in str_cols])
+    return df
+
+
+def _validate_columns(df: pl.DataFrame, required_cols: List[str], file_name: str):
+    for col in required_cols:
+        if col not in df.columns:
+            raise DrillholeValidationError(
+                f"File '{file_name}' is missing required column '{col}'. "
+                f"Found columns: {df.columns}"
+            )
+
+
+def _validate_no_nulls(df: pl.DataFrame, numeric_cols: List[str], file_name: str):
+    for col in numeric_cols:
+        null_rows = df[col].is_null().arg_true().to_list()
+        if null_rows:
+            rows_human = [r + 2 for r in null_rows[:5]]
+            more = f" (and {len(null_rows) - 5} more)" if len(null_rows) > 5 else ""
+            raise DrillholeValidationError(
+                f"File '{file_name}': column '{col}' has missing/null values "
+                f"at rows {rows_human}{more}. Check those rows and fill or remove them."
+            )
+
 
 def check_unique_sets(*args: Union[Set, List], verbose: bool = False) -> List[Any]:
     # Convert all inputs to sets
@@ -116,6 +173,42 @@ class Assay(object):
             - set([self.dhid, self.from_col, self.to_col])
         )
 
+    @classmethod
+    def from_csv(
+        cls,
+        path: str,
+        dhid: str,
+        from_col: str,
+        to_col: str,
+        target_variables: StringList,
+        target_selector: Literal["all", "pick"] = "all",
+        tag_name: str = "assay",
+        schema_overrides: Optional[dict] = None,
+    ) -> "Assay":
+        file_name = Path(path).name
+        df = _read_csv(path, schema_overrides=schema_overrides)
+        cols_to_drop = []
+        for col in df.columns:
+            is_unnamed = not col.strip() or col.startswith("_duplicated_")
+            is_all_null = df[col].is_null().all()
+            if is_unnamed or is_all_null:
+                reason = "unnamed" if is_unnamed else "all-null values"
+                print(f"[WARNING] '{file_name}': skipping column '{col}' ({reason})")
+                cols_to_drop.append(col)
+        if cols_to_drop:
+            df = df.drop(cols_to_drop)
+        _validate_columns(df, [dhid, from_col, to_col], file_name)
+        _validate_no_nulls(df, [from_col, to_col], file_name)
+        return cls(
+            dataframe=df,
+            dhid=dhid,
+            from_col=from_col,
+            to_col=to_col,
+            target_variables=target_variables,
+            target_selector=target_selector,
+            tag_name=tag_name,
+        )
+
     def filter_drillhole(self, by: str):
         return self.dataframe.filter(pl.col(self.dhid) == by)
 
@@ -161,26 +254,40 @@ class Assay(object):
                 "TO": comp_to,
             })
 
-        comp_vars = np.full((n_comp, n_vars), "NULL", dtype="<U16")  # Result matrix for all variables
-        drill_variables = np.stack([df[var].to_numpy() for var in self.assay_categorical_cols], axis=1)
+        comp_vars = np.full((n_comp, n_vars), "NULL", dtype="<U256")
+        # Cast all categorical columns to string and fill nulls so np.unique can sort them
+        drill_variables = np.stack([
+            df[var].cast(pl.Utf8).fill_null("NULL").to_numpy()
+            for var in self.assay_categorical_cols
+        ], axis=1)
 
-        for icomp in range(n_comp):
-            comp_start = comp_from[icomp]
-            comp_end = comp_to[icomp]
+        try:
+            for icomp in range(n_comp):
+                comp_start = comp_from[icomp]
+                comp_end = comp_to[icomp]
 
-            # Determine overlaps
-            overlap = np.minimum(drill_to, comp_end) - np.maximum(drill_from, comp_start)
-            mask = overlap < 0
-            overlap[mask] = 0
-            weights = overlap[~mask]
-            values = drill_variables[~mask]
+                # Determine overlaps
+                overlap = np.minimum(drill_to, comp_end) - np.maximum(drill_from, comp_start)
+                mask = overlap < 0
+                overlap[mask] = 0
+                weights = overlap[~mask]
+                values = drill_variables[~mask]
 
-            result = (
-                np.full((1, len(self.assay_categorical_cols)), "NULL", dtype="<U16")
-                if np.size(weights) == 0
-                else self.__most_frequent_category(weights, values)
-            )
-            comp_vars[icomp] = result
+                result = (
+                    np.full((1, len(self.assay_categorical_cols)), "NULL", dtype="<U256")
+                    if np.size(weights) == 0
+                    else self.__most_frequent_category(weights, values)
+                )
+                comp_vars[icomp] = result
+        except (TypeError, ValueError) as e:
+            raise DrillholeValidationError(
+                f"Hole '{hole_id}': failed to regularize categorical columns "
+                f"{self.assay_categorical_cols}. "
+                f"This happens when a column contains mixed or incomparable value types "
+                f"(e.g. numbers mixed with text, or unexpected null representations). "
+                f"Check those columns in the assay file and ensure values are consistent. "
+                f"Original error: {e}"
+            ) from e
 
         # Create the final Polars DataFrame
         data = {
@@ -276,6 +383,30 @@ class Survey(object):
         self.tag_name = tag_name
         self.__autosort()
 
+    @classmethod
+    def from_csv(
+        cls,
+        path: str,
+        dhid: str,
+        depth_col: str,
+        azimuth_col: str,
+        dip_col: str,
+        tag_name: str = "survey",
+        schema_overrides: Optional[dict] = None,
+    ) -> "Survey":
+        file_name = Path(path).name
+        df = _read_csv(path, schema_overrides=schema_overrides)
+        _validate_columns(df, [dhid, depth_col, azimuth_col, dip_col], file_name)
+        _validate_no_nulls(df, [depth_col, azimuth_col, dip_col], file_name)
+        return cls(
+            dataframe=df,
+            dhid=dhid,
+            depth_col=depth_col,
+            azimuth_col=azimuth_col,
+            dip_col=dip_col,
+            tag_name=tag_name,
+        )
+
     def __autosort(self):
         self.dataframe = (
             self.dataframe
@@ -304,6 +435,36 @@ class Collar(object):
         self.elev_col = elev_col
         self.length_col = length_col
         self.tag_name = tag_name
+
+    @classmethod
+    def from_csv(
+        cls,
+        path: str,
+        dhid: str,
+        east_col: str,
+        north_col: str,
+        elev_col: str,
+        length_col: str,
+        tag_name: str = "collar",
+        schema_overrides: Optional[dict] = None,
+    ) -> "Collar":
+        file_name = Path(path).name
+        df = _read_csv(path, schema_overrides=schema_overrides)
+        _validate_columns(df, [dhid, east_col, north_col, elev_col, length_col], file_name)
+        _validate_no_nulls(df, [east_col, north_col, elev_col, length_col], file_name)
+        if df[dhid].n_unique() < df.height:
+            raise DrillholeValidationError(
+                f"File '{file_name}': column '{dhid}' contains duplicate drillhole IDs."
+            )
+        return cls(
+            dataframe=df,
+            dhid=dhid,
+            east_col=east_col,
+            north_col=north_col,
+            elev_col=elev_col,
+            length_col=length_col,
+            tag_name=tag_name,
+        )
 
     def filter_drillhole(self, by: str):
         return self.dataframe.filter(pl.col(self.dhid) == by)
@@ -366,6 +527,11 @@ class DrillholesCampaign(object):
             )
             dhs_composited.append(_assay_segments)
 
+        if not dhs_composited:
+            raise DrillholeValidationError(
+                "No drillhole data found for any valid hole ID. "
+                "Verify that hole IDs in assay, collar, and survey files match exactly."
+            )
         return pl.concat(dhs_composited)
 
     def composite(self, comp_length: Union[int, float], return_dtype: Literal["pandas", "polars"] = "polars") -> pl.DataFrame:
