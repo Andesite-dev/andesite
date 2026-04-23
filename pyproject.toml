@@ -6,7 +6,7 @@ requires = ["setuptools>=80", "wheel"]
 authors = [{name = "ANDESITE SpA", email = "axel.troncoso@andesite.cl"}]
 dependencies = [
   # Data processing
-  "numpy==1.26.1", # pinned — compiled-extension chain not yet validated for numpy 2.x
+  "numpy==1.26.1", # pinned - compiled-extension chain not yet validated for numpy 2.x
   "pandas>=2.3.1",
   "polars>=1.31.0",
   "pyarrow>=21.0.0", # polars Arrow backend
@@ -57,9 +57,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 ignore = [
-  "ANN401", # Dynamically typed expressions (Any) — used throughout
-  "S101", # assert — needed for internal validation
-  "N818", # Exception name suffix — existing public API; mass-rename is a separate PR
+  "ANN401", # Dynamically typed expressions (Any) - used throughout
+  "S101", # assert - needed for internal validation
+  "N818", # Exception name suffix - existing public API; mass-rename is a separate PR
 ]
 select = [
   "E", # pycodestyle errors
@@ -135,10 +135,10 @@ show_missing = true
 skip_covered = false
 
 [tool.bandit]
-# B101 assert_used — needed for internal validation
-# B105/B106 hardcoded_password_* — false positives on form-reset variables
-# B311 random — Monte Carlo simulation, not cryptography
-# B404/B603/B607 subprocess — used only for `git describe` version detection
+# B101 assert_used - needed for internal validation
+# B105/B106 hardcoded_password_* - false positives on form-reset variables
+# B311 random - Monte Carlo simulation, not cryptography
+# B404/B603/B607 subprocess - used only for `git describe` version detection
 skips = ["B101", "B105", "B106", "B311", "B404", "B603", "B607"]
 
 [tool.setuptools]

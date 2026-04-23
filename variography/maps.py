@@ -12,6 +12,7 @@ from andesite.utils.manipulations import globalize_backslashes
 import plotly.graph_objects as go
 import plotly.express as px
 from icecream import ic
+from scipy.interpolate import griddata
 
 class VarMap:
 
@@ -206,6 +207,242 @@ class VarMap:
             if file.startswith('param') or file.startswith('result'):
                 os.remove(os.path.join(tempfile.gettempdir(), file))
         os.remove(self.real_path_filename)
+
+    def _build_polar_grid_traces(self, max_r, plane, varmap_df):
+        theta_circle = np.linspace(0, 2 * np.pi, 361)
+        ring_x, ring_y = [], []
+        for r in self.tickvalues[1:]:
+            ring_x.extend((r * np.sin(theta_circle)).tolist())
+            ring_y.extend((r * np.cos(theta_circle)).tolist())
+            ring_x.append(None)
+            ring_y.append(None)
+        rings = go.Scatter(
+            x=ring_x, y=ring_y,
+            mode='lines',
+            line=dict(color='#858585', width=0.8),
+            opacity=0.6,
+            showlegend=False,
+            hoverinfo='skip',
+        )
+
+        spoke_x, spoke_y = [], []
+        for d in np.arange(0, 360, 180 / self.n_directions):
+            rad = np.radians(d)
+            ex = max_r * np.sin(rad)
+            ey = max_r * np.cos(rad)
+            spoke_x += [0, ex, None]
+            spoke_y += [0, ey, None]
+        spokes = go.Scatter(
+            x=spoke_x, y=spoke_y,
+            mode='lines',
+            line=dict(color='#858585', width=0.5, dash='dot'),
+            opacity=0.5,
+            showlegend=False,
+            hoverinfo='skip',
+        )
+
+        labels = go.Scatter(
+            x=[0.0] * len(self.tickvalues[1:]),
+            y=list(self.tickvalues[1:]),
+            mode='text',
+            text=[f'{int(r)}' for r in self.tickvalues[1:]],
+            textposition='top center',
+            textfont=dict(size=10, color='#555555', family='Arial'),
+            showlegend=False,
+            hoverinfo='skip',
+        )
+
+        tickvals = np.sort(varmap_df['direction'].unique())
+
+        if plane == 'XY':
+            ticktext = [f'{t:g}' for t in tickvals]
+        else:
+            ticktext = [
+                f'-{t:g}' if t > 0 and t <= 90 else
+                '0' if t == 0 else
+                '' if t > 90 and t < 270 else
+                f'{360 - t:g}'
+                for t in tickvals
+            ]
+
+        margin = max_r * 0.10
+        annotations = []
+
+        for ang, txt in zip(tickvals, ticktext):
+            if txt == '':
+                continue
+
+            rad = np.radians(ang)
+
+            if plane == 'XY':
+                ax = (max_r + margin) * np.sin(rad)
+                ay = (max_r + margin) * np.cos(rad)
+            else:
+                ax = (max_r + margin) * np.cos(rad)
+                ay = (max_r + margin) * np.sin(rad)
+
+            annotations.append(dict(
+                x=ax,
+                y=ay,
+                text=f'{txt}',
+                showarrow=False,
+                font=dict(size=14, color='black', family='Arial Black'),
+                xanchor='center',
+                yanchor='middle',
+            ))
+        return rings, spokes, labels, annotations
+
+    def _build_colorscale(self, varmap_df):
+        varmap_values = varmap_df['variogram']
+        if self.legend_type == 'discrete':
+            cmin, cmax = 0.0, 1.2
+            norm_07 = (0.7 - cmin) / (cmax - cmin)
+            norm_1 = (1.0 - cmin) / (cmax - cmin)
+            colorscale = [
+                [0.0, '#ADDEA5'], [norm_07, '#ADDEA5'],
+                [norm_07, '#FFD684'], [norm_1, '#FFD684'],
+                [norm_1, '#C6294A'], [1.0, '#C6294A'],
+            ]
+            colorbar = dict(
+                title=dict(text=self.input_grades, font=dict(size=16)),
+                thickness=28,
+                tickvals=[0.35, 0.85, (1 + cmax) / 2],
+                ticktext=['0 - 0.7', '0.7 - 1', '> 1'],
+                tickmode='array',
+            )
+        else:
+            cmin = float(varmap_values.quantile(0.01))
+            cmax = float(varmap_values.quantile(0.99))
+            colorscale = px.colors.sequential.Jet
+            colorbar = dict(
+                title=dict(text=self.input_grades, font=dict(size=16)),
+                thickness=28,
+            )
+        return colorscale, colorbar, cmin, cmax
+
+    def _polar_to_cartesian_grid(self, varmap_df):
+        df = varmap_df[varmap_df['pairs'] > 0].copy()
+        if df.empty:
+            df = varmap_df.copy()
+
+        coords = self.get_coordinates(
+            df['direction'].to_numpy(dtype=float),
+            df['steps'].to_numpy(dtype=float),
+        )
+        plane = self.plane.upper()
+        if plane == 'XY':
+            plot_x, plot_y = coords[:, 1], coords[:, 0]
+        elif plane == 'XZ':
+            plot_x, plot_y = coords[:, 0], coords[:, 2]
+        else:
+            plot_x, plot_y = coords[:, 1], coords[:, 2]
+
+        inner = df['steps'] == self.lag_size
+        center_val = df.loc[inner, 'variogram'].mean() if inner.any() else df['variogram'].mean()
+        scatter_x = np.append(plot_x, 0.0)
+        scatter_y = np.append(plot_y, 0.0)
+        scatter_z = np.append(df['variogram'].to_numpy(dtype=float), center_val)
+
+        max_r = float(self.lag_size * self.lag_count)
+        grid_res = 200
+        xi = np.linspace(-max_r, max_r, grid_res)
+        yi = np.linspace(-max_r, max_r, grid_res)
+        Xi, Yi = np.meshgrid(xi, yi)
+        try:
+            Zi = griddata((scatter_x, scatter_y), scatter_z, (Xi, Yi), method='cubic')
+        except Exception:
+            Zi = griddata((scatter_x, scatter_y), scatter_z, (Xi, Yi), method='linear')
+
+        Zi[np.sqrt(Xi ** 2 + Yi ** 2) > max_r] = np.nan
+        return xi, yi, Zi, max_r
+
+    def _build_polar_layout(self, varmap_df, figsize, title, max_r, annotations):
+        axis_range = [-max_r * 1.2, max_r * 1.2]
+        if self.plane.upper() == 'XY':
+            rotation = 90
+        else:
+            rotation = 0
+
+        tickvals = np.sort(varmap_df['direction'].unique())
+        if self.plane.upper() == 'XY':
+            ticktext = tickvals
+        else:
+            ticktext = [f'-{t}' if t > 0 and t <= 90 else 0.0
+                        if t == 0 else '' if t > 90 and t < 270
+                        else f'{360 - t}' for t in tickvals]
+
+        return dict(
+            width=figsize[0],
+            height=figsize[1],
+            title=title or f'Variographic Map {self.input_grades} plane {self.plane.upper()}',
+            font_size=14,
+            xaxis=dict(visible=False, range=axis_range, scaleanchor='y', scaleratio=1),
+            yaxis=dict(visible=False, range=axis_range),
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            annotations=annotations,
+            margin=dict(l=20, r=20, t=60, b=20),
+        )
+
+    def plot_heatmap(self, varmap_df, title=None, figsize=(700, 650), export=False):
+        xi, yi, Zi, max_r = self._polar_to_cartesian_grid(varmap_df)
+        colorscale, colorbar, cmin, cmax = self._build_colorscale(varmap_df)
+        plane = self.plane.upper()
+        rings, spokes, labels, annotations = self._build_polar_grid_traces(max_r, plane, varmap_df)
+
+        fig = go.Figure()
+        fig.add_trace(go.Heatmap(
+            x=xi,
+            y=yi,
+            z=Zi,
+            zmin=cmin,
+            zmax=cmax,
+            colorscale=colorscale,
+            colorbar=colorbar,
+            zsmooth='best',
+            hoverongaps=False,
+            connectgaps=False,
+            hovertemplate='Variogram: %{z:.4f}<extra></extra>',
+            showscale=True,
+        ))
+        fig.add_trace(rings)
+        fig.add_trace(spokes)
+        # fig.add_trace(labels)
+        fig.update_layout(**self._build_polar_layout(varmap_df, figsize, title, max_r, annotations))
+
+        if export:
+            fig.write_html(f"varmap-heatmap-{self.input_grades}-{self.plane.upper()}.html")
+        return fig
+
+    def plot_contour(self, varmap_df, title=None, figsize=(700, 650), export=False):
+        xi, yi, Zi, max_r = self._polar_to_cartesian_grid(varmap_df)
+        colorscale, colorbar, cmin, cmax = self._build_colorscale(varmap_df)
+        plane = self.plane.upper()
+        rings, spokes, labels, annotations = self._build_polar_grid_traces(max_r, plane, varmap_df)
+
+        fig = go.Figure()
+        fig.add_trace(go.Contour(
+            x=xi,
+            y=yi,
+            z=Zi,
+            zmin=cmin,
+            zmax=cmax,
+            colorscale=colorscale,
+            colorbar=colorbar,
+            ncontours=20,
+            contours=dict(showlines=False),
+            connectgaps=False,
+            hovertemplate='Variogram: %{z:.4f}<extra></extra>',
+            showscale=True,
+        ))
+        fig.add_trace(rings)
+        fig.add_trace(spokes)
+        # fig.add_trace(labels)
+        fig.update_layout(**self._build_polar_layout(varmap_df, figsize, title, max_r, annotations))
+
+        if export:
+            fig.write_html(f"varmap-contour-{self.input_grades}-{self.plane.upper()}.html")
+        return fig
 
     def plot(self, varmap_df, title = None, figsize=(700, 650), export=False):
         """
