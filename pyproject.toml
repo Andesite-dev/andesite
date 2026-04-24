@@ -38,7 +38,7 @@ name = "andesite"
 readme = "README.md"
 requires-python = ">=3.12.10"
 urls = {homepage = "http://www.andesite.cl/"}
-version = "0.9.3"
+version = "0.9.4"
 
 [dependency-groups]
 tests = [

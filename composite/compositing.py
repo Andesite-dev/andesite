@@ -3,6 +3,7 @@ from pathlib import Path
 import polars as pl
 from typing import Optional, Union, Set, List, Any, Tuple, Literal
 import numpy as np
+from loguru import logger
 from ..utils._globals import (
     NUMERIC_DTYPES_POLARS,
     STRING_DTYPES_POLARS,
@@ -63,7 +64,11 @@ def _validate_columns(df: pl.DataFrame, required_cols: List[str], file_name: str
 
 def _validate_no_nulls(df: pl.DataFrame, numeric_cols: List[str], file_name: str):
     for col in numeric_cols:
-        null_rows = df[col].is_null().arg_true().to_list()
+        null_rows = (
+            df.with_row_index("__idx__")
+            .filter(pl.col(col).is_null())["__idx__"]
+            .to_list()
+        )
         if null_rows:
             rows_human = [r + 2 for r in null_rows[:5]]
             more = f" (and {len(null_rows) - 5} more)" if len(null_rows) > 5 else ""
@@ -82,7 +87,7 @@ def check_unique_sets(*args: Union[Set, List], verbose: bool = False) -> List[An
 
     # Convert sets to lists for the output
     if verbose:
-        print(f"Number of common values: {len(common_values)}")
+        logger.info(f"check_unique_sets: {len(common_values)} common values")
     return list(common_values)
 
 class Assay(object):
@@ -189,11 +194,20 @@ class Assay(object):
         df = _read_csv(path, schema_overrides=schema_overrides)
         cols_to_drop = []
         for col in df.columns:
+            series = df[col]
+            logger.info(
+                f"Assay.from_csv '{file_name}': col='{col}' "
+                f"type={type(series).__name__} dtype={getattr(series, 'dtype', 'N/A')} "
+                f"len={getattr(series, '__len__', lambda: 'N/A')()}"
+            )
             is_unnamed = not col.strip() or col.startswith("_duplicated_")
-            is_all_null = df[col].is_null().all()
-            if is_unnamed or is_all_null:
-                reason = "unnamed" if is_unnamed else "all-null values"
-                print(f"[WARNING] '{file_name}': skipping column '{col}' ({reason})")
+            if is_unnamed:
+                logger.warning(f"'{file_name}': skipping column '{col}' (unnamed)")
+                cols_to_drop.append(col)
+                continue
+            is_all_null = series.null_count() == df.height
+            if is_all_null:
+                logger.warning(f"'{file_name}': skipping column '{col}' (all-null values)")
                 cols_to_drop.append(col)
         if cols_to_drop:
             df = df.drop(cols_to_drop)
@@ -257,7 +271,7 @@ class Assay(object):
         comp_vars = np.full((n_comp, n_vars), "NULL", dtype="<U256")
         # Cast all categorical columns to string and fill nulls so np.unique can sort them
         drill_variables = np.stack([
-            df[var].cast(pl.Utf8).fill_null("NULL").to_numpy()
+            df.select(pl.col(var).cast(pl.Utf8).fill_null("NULL")).to_numpy().flatten()
             for var in self.assay_categorical_cols
         ], axis=1)
 
@@ -571,8 +585,18 @@ class DrillholesCampaign(object):
         )
         self.regularized_columns = joined_df_filtered.columns[3:]
 
-        print("Asignando coordenadas...")
+        logger.info("Assigning coordinates (desurveying)...")
         composites = self.__desurverying(joined_df_filtered)
+
+        str_cols = [name for name, dtype in composites.schema.items() if dtype in STRING_DTYPES_POLARS]
+        if len(str_cols) > 0:
+            composites = composites.with_columns([
+                pl.when(pl.col(c).is_in(["-99", "nan", "NaN"]) | pl.col(c).is_null())
+                .then(pl.lit("NULL"))
+                .otherwise(pl.col(c))
+                .alias(c)
+                for c in str_cols
+            ])
 
         if return_dtype == "pandas":
             return composites.to_pandas() # type: ignore
@@ -636,5 +660,3 @@ class DrillholesCampaign(object):
             dhs_composited.append(_comp_df)
 
         return pl.concat(dhs_composited).rename({"FROM": "from", "TO": "to"})
-
-
