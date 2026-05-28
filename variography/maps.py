@@ -1,7 +1,6 @@
 
 
 import os
-import re
 import shutil
 import subprocess
 import tempfile
@@ -43,14 +42,6 @@ class VarMap:
         print(np.round(statistics_df, 3))
 
 
-    def gamv_formatted(self, gamv_file):
-        with open(gamv_file, 'r') as f:
-            lines = f.readlines()
-            variable = re.search(r'tail:([^\s]+)', lines[0].strip()).group(1)
-        with open(gamv_file, 'w') as file:
-            lines[0] = f'GAMV\n6\nindex\nsteps\ngamma\npairs\nhead_{variable}\ntail_{variable}\n'
-            file.writelines(lines)
-
     def create_gamv_params_temp(self, stand_sills=False):
         self.real_path_filename = transform_datafile_to_gslib(self.input_drillholes_path)
         ix, iy, iz = grab_index_coordinates(self.real_path_filename, self.coordinates)
@@ -66,16 +57,17 @@ class VarMap:
         else:
             directions = [90 - d for d in np.arange(0, 180, real_direction_step)]
         for dir in directions:
-            temp_params_path = tempfile.NamedTemporaryFile(prefix="params_gamv"+'_', suffix=".par", delete=False)
-            temp_out_filename_path = os.path.join(tempfile.gettempdir(), f'results_{dir}.out')
+            temp_params_path = tempfile.NamedTemporaryFile(prefix="params_gamv_", suffix=".par", delete=False)
             fmt_params_path = globalize_backslashes(temp_params_path.name)
+            temp_params_path.close()
+            temp_out_filename_path = os.path.join(tempfile.gettempdir(), f'results_{dir}.out')
             fmt_out_path = globalize_backslashes(temp_out_filename_path)
             current_dir = os.path.dirname(os.path.abspath(__file__))
             with open(os.path.join(current_dir, '../utils/bin/gamv-generic.par'), 'r') as file:
                 lines = file.readlines()
             with open(fmt_params_path, 'w') as f:
                 lines[1] = f'{globalize_backslashes(self.real_path_filename)}                      -file with data\n'
-                lines[2] = f'{ix}   {iy}   {iz}                         -   columns for X, Y, Z coordinates\n'
+                lines[2] = f'0   {ix}   {iy}   {iz}   0   0   0         -columns: BHID,X,Y,Z,WT,FROM,TO\n'
                 lines[3] = f'1   {igrade}                             -   number of variables,col numbers\n'
                 lines[5] = f'{fmt_out_path}                   - file for variogram output\n'
                 lines[6] = f'{self.lag_count}                                - number of lags\n'
@@ -122,12 +114,11 @@ class VarMap:
 
     def run_gamv(self, parameters):
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        # logger.debug(f'running >>>{os.path.join(current_dir, "bin/gamv_OpenMP.exe")} {parameters}')
         si = subprocess.STARTUPINFO()
         CREATE_NO_WINDOW = 0x08000000
         output = subprocess.check_output([globalize_backslashes(os.path.join(current_dir, '../utils/bin/gamv_OpenMP.exe')), f'{parameters}'], creationflags=CREATE_NO_WINDOW)
         output_str = output.decode("utf-8")
-        if "GAMV Version: 3.100 Finished" in output_str:
+        if "GAMV elapsed time:" in output_str:
             return
         else:
             raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {parameters}')
@@ -164,8 +155,6 @@ class VarMap:
         return angles
 
     def transform_varmap_to_dataframe(self):
-        for out in self._paths:
-            self.gamv_formatted(out[1])
 
         angles = self.complete_varmap_radius()
 
@@ -191,6 +180,10 @@ class VarMap:
         self.create_gamv_params_temp(stand_sills = stand_sills)
         for par in self._paths:
             self.run_gamv(par[0])
+            expected = par[1]
+            actual = f'{os.path.splitext(expected)[0]}_{self.input_grades}_semivariogram.out'
+            if os.path.exists(actual):
+                os.replace(actual, expected)
 
         self.varmap_df = self.transform_varmap_to_dataframe()
         self.clear()
@@ -286,7 +279,7 @@ class VarMap:
                 y=ay,
                 text=f'{txt}',
                 showarrow=False,
-                font=dict(size=14, color='black', family='Arial Black'),
+                font=dict(size=14, color='black', family='Arial'),
                 xanchor='center',
                 yanchor='middle',
             ))
@@ -572,7 +565,7 @@ class VarMap:
                     'gridcolor': '#858585',
                     'tickfont': {
                         'size': 14,
-                        'family': 'Arial Black',
+                        'family': 'Arial',
                         'color': 'black'
                     },
                     'angle': 25,
