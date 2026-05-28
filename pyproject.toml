@@ -21,6 +21,7 @@ dependencies = [
   "PyYAML>=6.0",
   "tenacity>=9.1.2",
   "pytz>=2026.1.post1",
+  "h5py>=3.11.0",
 ]
 description = "Geostatistical analysis and mining estimation software"
 keywords = [
@@ -38,7 +39,7 @@ name = "andesite"
 readme = "README.md"
 requires-python = ">=3.12.10"
 urls = {homepage = "http://www.andesite.cl/"}
-version = "0.9.4"
+version = "0.9.8"
 
 [dependency-groups]
 tests = [
@@ -49,7 +50,6 @@ tests = [
 [tool.uv]
 default-groups = ["tests"]
 
-# ── Ruff ──────────────────────────────────────────────────────────────────────
 [tool.ruff]
 line-length = 100
 src = ["."]
@@ -153,7 +153,9 @@ packages = [
   "andesite.tests",
   "andesite.utils",
   "andesite.utils.bin",
+  "andesite.core",
   "andesite.variography",
+  "andesite.visualizations",
 ]
 
 [tool.setuptools.package-data]
