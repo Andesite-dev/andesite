@@ -32,6 +32,7 @@ def grab_n_cols(
                 return result
     except Exception as e:
         raise
+    raise ValueError(f"File has fewer than 2 lines (not valid GSLIB format): {datafile}")
 
 def grab_col_names(
     datafile: Union[str, "PathLike[str]"]
@@ -157,11 +158,37 @@ def grab_index_target(drillholes_datafile, target):
     igrade = variables.get_loc(target) + 1
     return igrade
 
+def _read_hdf5_auto(filepath: str) -> pd.DataFrame:
+    """Read HDF5 file, auto-detecting v2 h5py layout vs v1 pandas/pytables."""
+    import h5py  # optional dependency — only needed for .hdf5 files
+    try:
+        with h5py.File(filepath, "r") as f:
+            is_v2 = "version" in f.attrs and "col_names" in f
+    except Exception:
+        is_v2 = False
+
+    if is_v2:
+        with h5py.File(filepath, "r") as f:
+            cols = [c.decode() if isinstance(c, bytes) else c for c in f["col_names"][:]]
+            data = {}
+            for col in cols:
+                ds = f[col]
+                arr = ds[:]
+                if h5py.check_string_dtype(ds.dtype):
+                    arr = np.array(
+                        [v.decode() if isinstance(v, bytes) else v for v in arr],
+                        dtype=object,
+                    )
+                data[col] = arr
+        return pd.DataFrame(data)
+    return pd.read_hdf(filepath)
+
+
 def remove_categorical_columns(filepath):
     if filepath.endswith('.csv'):
         df = pd.read_csv(filepath)
     elif filepath.endswith('.hdf5'):
-        df = pd.read_hdf(filepath)
+        df = _read_hdf5_auto(filepath)
     else:
         df = read_file_from_gslib(filepath)
     not_obj_df = df.select_dtypes(exclude=['object'])
@@ -173,7 +200,7 @@ def load_datafile(filepath):
     if filepath.endswith('.csv'):
         return pd.read_csv(filepath)
     elif filepath.endswith('.hdf5'):
-        return pd.read_hdf(filepath)
+        return _read_hdf5_auto(filepath)
     else:
         return read_file_from_gslib(filepath).compute()
 
