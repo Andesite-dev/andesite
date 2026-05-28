@@ -1,8 +1,8 @@
+import glob
 import os
-import re
 import subprocess
 import tempfile
-from andesite.utils.files import grab_index_coordinates, load_datafile, read_file_from_gslib, dataframe_to_gslib
+from andesite.utils.files import grab_index_coordinates, grab_index_target, load_datafile, read_file_from_gslib, dataframe_to_gslib
 from andesite.utils.manipulations import globalize_backslashes
 from itertools import combinations
 class CorrelogramTask:
@@ -45,16 +45,18 @@ class CorrelogramTask:
     def create_params_temp(self, n_ugs, idx_ugs, input_drillholes_path, ug_pairs, elipsoid=False, stand_sills=False):
         ix, iy, iz = grab_index_coordinates(input_drillholes_path, self.coordinates)
 
-        temp_params_path = tempfile.NamedTemporaryFile(prefix="params_gamv"+'_', suffix=".par", delete=False)
-        temp_out_filename_path = tempfile.NamedTemporaryFile(prefix="gamv"+'_', suffix=".out", delete=False)
+        temp_params_path = tempfile.NamedTemporaryFile(prefix="params_gamv_", suffix=".par", delete=False)
+        temp_out_filename_path = tempfile.NamedTemporaryFile(prefix="gamv_", suffix=".out", delete=False)
         self.fmt_params_path = globalize_backslashes(temp_params_path.name)
         self.fmt_out_path = globalize_backslashes(temp_out_filename_path.name)
+        temp_params_path.close()
+        temp_out_filename_path.close()
         current_dir = os.path.dirname(os.path.abspath(__file__))
         with open(os.path.join(current_dir, '../utils/bin/gamv-generic.par'), 'r', encoding='utf-8') as file:
             lines = file.readlines()
         with open(self.fmt_params_path, 'w', encoding='utf-8') as f:
             lines[1] = f'{globalize_backslashes(input_drillholes_path)}                      -file with data\n'
-            lines[2] = f'{ix}   {iy}   {iz}                         -   columns for X, Y, Z coordinates\n'
+            lines[2] = f'0   {ix}   {iy}   {iz}   0   0   0         -columns: BHID,X,Y,Z,WT,FROM,TO\n'
             lines[3] = f'{n_ugs}   {idx_ugs}                             -   number of variables,col numbers\n'
             lines[5] = f'{self.fmt_out_path}                   - file for variogram output\n'
             lines[6] = f'{int(self.lag_count)}                                - number of lags\n'
@@ -70,31 +72,15 @@ class CorrelogramTask:
 
     def gamv_correlogram_formatted(self, gamv_file):
         with open(gamv_file, 'r', encoding='utf-8', errors='replace') as f:
-            file_content = f.read()
-
-        formatted_correlograms_paths = []
-
-        # Split the file content into individual sets
-        sets = file_content.strip().split('Correlogram')
-        for index, set_content in enumerate(sets[1:], start=1):
-            # Extract variable name for each set
-            tail = re.search(r'tail:([^\s]+)', set_content).group(1)
-            head = re.search(r'head:([^\s]+)', set_content).group(1)
-            # Remove the first line (unwanted line) from each set
-            set_content_lines = set_content.strip().split('\n')[1:]
-            formatted_content = '\n'.join(set_content_lines)
-
-            # Format the set content
-            formatted_content = f'Correlogram\n8\nindex\nsteps\ngamma\npairs\nhead_{head}\ntail_{tail}\nvhead_{head}\nvtail_{tail}\n{formatted_content}'
-            # Write the formatted content to a new file or overwrite the original file
-            formatted_output_path = f'{os.path.splitext(gamv_file)[0]}_{index}.out'
-            print(f"Writting on {formatted_output_path} ...")
-            with open(formatted_output_path, 'w', encoding='utf-8') as file:
-                file.write(formatted_content)
-
-            formatted_correlograms_paths.append(formatted_output_path)
-
-        return formatted_correlograms_paths
+            content = f.read()
+        paths = []
+        parts = content.strip().split('Correlogram')
+        for index, section in enumerate(parts[1:], start=1):
+            out_path = f'{os.path.splitext(gamv_file)[0]}_{index}_correlogram.out'
+            with open(out_path, 'w', encoding='utf-8') as f:
+                f.write('Correlogram' + section)
+            paths.append(out_path)
+        return paths
 
     def run_gamv(self, parameters):
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -102,7 +88,7 @@ class CorrelogramTask:
         CREATE_NO_WINDOW = 0x08000000
         output = subprocess.check_output([globalize_backslashes(os.path.join(current_dir, '../utils/bin/gamv_OpenMP.exe')), f'{parameters}'], creationflags=CREATE_NO_WINDOW)
         output_str = output.decode("utf-8")
-        if "GAMV Version: 3.100 Finished" in output_str:
+        if "GAMV elapsed time:" in output_str:
             return
         else:
             raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {parameters}\n{output_str}')
@@ -117,28 +103,35 @@ class CorrelogramTask:
                 return row[self.input_grades]
             return -999
 
-        ug_cols_idx = []
         for ug_val in unique_ugs:
             col_name = f'UG{int(ug_val)}_{self.input_grades}'
             datafile[col_name] = datafile.apply(target_ohe, axis=1, args=(ug_val,))
-            ug_cols_idx.append(str(datafile.columns.get_loc(col_name) + 1))
 
         not_obj_df = datafile.select_dtypes(exclude=['object'])
-        datafile_ug_path = tempfile.NamedTemporaryFile(prefix="drillhole"+'_', suffix=".dat", delete=False)
-
-        ug_cols_idx_params = "  ".join(ug_cols_idx)
+        datafile_ug_path = tempfile.NamedTemporaryFile(prefix="drillhole_", suffix=".dat", delete=False)
+        datafile_ug_path.close()
 
         dataframe_to_gslib(not_obj_df, datafile_ug_path.name)
 
+        ug_cols_idx = []
+        for ug_val in unique_ugs:
+            col_name = f'UG{int(ug_val)}_{self.input_grades}'
+            ug_cols_idx.append(str(grab_index_target(datafile_ug_path.name, col_name)))
+
+        ug_cols_idx_params = "  ".join(ug_cols_idx)
+
         self.create_params_temp(
-            n_ugs = len(unique_ugs),
-            idx_ugs = ug_cols_idx_params,
-            input_drillholes_path = datafile_ug_path.name,
-            ug_pairs = cross_ugs
+            n_ugs=len(unique_ugs),
+            idx_ugs=ug_cols_idx_params,
+            input_drillholes_path=datafile_ug_path.name,
+            ug_pairs=cross_ugs,
         )
         self.run_gamv(self.fmt_params_path)
 
-        correlograms_paths = self.gamv_correlogram_formatted(self.fmt_out_path)
+        base = os.path.splitext(self.fmt_out_path)[0]
+        correlograms_paths = sorted(glob.glob(f'{base}_*_correlogram.out'))
+        if not correlograms_paths:
+            raise RuntimeError(f"gamv produced no correlogram output at {base}_*.out")
         return correlograms_paths
 
 
