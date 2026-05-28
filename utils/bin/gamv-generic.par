@@ -1,9 +1,9 @@
 START OF PARAMETERS:
 data.dat                      -file with data
-1   2   3                         -   columns for X, Y, Z coordinates
+0   1   2   3   0   0   0         -columns: BHID,X,Y,Z,WT,FROM,TO
 1   4                             -   number of variables,col numbers
-0     1.0e21                   -   trimming limits
-gamv.out              -file for variogram output
+-98.0     1.0e21                   -   trimming limits
+gamv.out                         -file for variogram output
 10                                -number of lags
 10.0                              -lag separation distance
 5.0                               -lag tolerance

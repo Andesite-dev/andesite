@@ -3,8 +3,8 @@
 
 START OF PARAMETERS:
 muestras.dat                     -file with data
-0  1  2  3  4  0                 -   columns for DH,X,Y,Z,var,sec var
-0   1.0e21                 -   trimming limits
+0  1  2  3  4  0  0              -   columns for DH,X,Y,Z,var,sec var,ugcol
+-98.0   1.0e21                 -   trimming limits
 0                                -option: 0=grid, 1=cross, 2=jackknife
 xvk.dat                          -file with jackknife data
 1   2   0    3    0              -   columns for X,Y,Z,vr and sec var
@@ -27,8 +27,10 @@ extdrift.dat                     -gridded file with drift/mean
 2    0.06                        -nst, nugget effect
 1    0.18  0.0   0.0   0.0       -it,cc,ang1,ang2,ang3
          100.0  100.0  100.0     -a_hmax, a_hmin, a_vert
-
-
+0                                        -use ug kriging (0=no, 1=yes)
+ug/blockmodel.dat                        -external grid file
+7                                        -column for UG values in grid file
+1                                        -target UG to krige
 
 
 
