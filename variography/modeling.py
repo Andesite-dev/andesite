@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 
-from .experimental import VariogramDatafile
+from .experimental import VariogramDatafile, _resolve_palette
 
 def rotation_matrix_azm_dip(azimuth, dip=0, rake=0):
     azimuth = np.deg2rad(azimuth)
@@ -302,8 +302,8 @@ class VariogramModeling:
 
         return self.model_df
 
-    def plot(self, export=False):
-        colors = ['black', 'blue', 'green']
+    def plot(self, export=False, palette=None):
+        colors = _resolve_palette(palette)
         fig = go.Figure()
         for i in range(0, int(self.model_df.shape[1]/2)):
             fig.add_trace(
@@ -367,4 +367,53 @@ class VariogramModeling:
         if export:
             fig.write_html(f'modeling-{self.experimental_dirs[0][0]}-{self.experimental_dirs[0][1]}.html')
         return fig
+
+
+if __name__ == '__main__':
+    from andesite.variography.experimental import Variogram
+
+    # ── Configure these for your dataset ──────────────────────────────────
+    DATAFILE    = r'path\to\your\datafile.csv'   # CSV or GSLIB with X, Y, Z, GRADE columns
+    COORDINATES = ['X', 'Y', 'Z']
+    GRADE       = 'CU'
+
+    vario_params = {
+        'azimuth':              45,
+        'azimuth_tolerance':    45,
+        'dip':                  0,
+        'dip_tolerance':        45,
+        'lag_count':            10,
+        'lag_size':             50,
+        'lag_tolerance':        25,
+        'horizontal_bandwidth': 9999,
+        'vertical_bandwidth':   9999,
+    }
+
+    model_params = {
+        'nugget': 0.1,
+        'structures': [
+            {
+                'type':   'Spherical',       # 'Exponential' | 'Gaussian' | 'Spherical'
+                'sill':   0.5,
+                'angles': (45, 0, 0),        # (azimuth, dip, rake) degrees
+                'ranges': (200, 100, 50),    # (range1, range2, range3) metres
+            }
+        ],
+    }
+    # ── End configuration ─────────────────────────────────────────────────
+
+    # Step 1 — compute elipsoid experimental variogram (3 directions)
+    v = Variogram(
+        input_drillholes=DATAFILE,
+        coordinates=COORDINATES,
+        input_grades=GRADE,
+        params=vario_params,
+    )
+    vario_file = v.elipsoid_variogram()
+
+    # Step 2 — fit and plot model; change palette to 'andes', 'nevado_dark', or 'nevado_light'
+    vm = VariogramModeling(vario_file, model_params)
+    vm.modeling()
+    vm.plot(export=True, palette='nevado_light')
+    print('Variogram modeling exported: modeling-45-0.html')
 
