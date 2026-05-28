@@ -1,10 +1,10 @@
 import numpy as np
 import plotly.graph_objects as go
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, confusion_matrix
+from sklearn.metrics import mean_absolute_error, mean_squared_error, root_mean_squared_error, r2_score, confusion_matrix
 
 def regression_report(true_values, estimate_values):
     mse = mean_squared_error(true_values, estimate_values)
-    rmse = mean_squared_error(true_values, estimate_values, squared=False)
+    rmse = root_mean_squared_error(true_values, estimate_values)
     mae = mean_absolute_error(true_values, estimate_values)
     r2 = r2_score(true_values, estimate_values)
     corrcoef = np.corrcoef(estimate_values, true_values)[0, 1]
