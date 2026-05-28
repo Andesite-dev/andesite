@@ -1,5 +1,4 @@
 import os
-import re
 import subprocess
 import tempfile
 import pandas as pd
@@ -7,6 +6,23 @@ from andesite.utils.files import grab_index_coordinates, grab_index_target, read
 from andesite.utils.manipulations import globalize_backslashes
 import plotly.graph_objects as go
 from icecream import ic
+from andesite.visualizations.base_plotly import PALETTE_HEX
+from andesite.visualizations.plotly_plots_nevado import NEVADO_QUALITATIVE_DARK, NEVADO_QUALITATIVE_LIGHT
+
+_PALETTE_MAP = {
+    'andes': PALETTE_HEX,
+    'nevado_dark': NEVADO_QUALITATIVE_DARK,
+    'nevado_light': NEVADO_QUALITATIVE_LIGHT,
+}
+_DEFAULT_COLORS = ['black', 'blue', 'green']
+
+def _resolve_palette(palette):
+    if palette is None:
+        return _DEFAULT_COLORS
+    colors = _PALETTE_MAP.get(palette)
+    if colors is None:
+        raise ValueError(f"Unknown palette '{palette}'. Choose from: {list(_PALETTE_MAP)}")
+    return list(colors[:3])
 
 class VariogramDatafile:
 
@@ -19,6 +35,26 @@ class VariogramDatafile:
 
     def get_metadata(self):
         return self.parameters
+
+    def add_direction(self, other: 'VariogramDatafile') -> 'VariogramDatafile':
+        n_existing = len(self.variogram.columns) // 3
+        n_adding   = len(other.variogram.columns) // 3
+        rename_map = {}
+        for i in range(1, n_adding + 1):
+            j = n_existing + i
+            rename_map[f'steps_dir{i}'] = f'steps_dir{j}'
+            rename_map[f'gamma_dir{i}'] = f'gamma_dir{j}'
+            rename_map[f'pairs_dir{i}'] = f'pairs_dir{j}'
+        new_df = pd.concat(
+            [self.variogram, other.variogram.rename(columns=rename_map)], axis=1
+        )
+        new_params = {
+            **self.parameters,
+            'directions': (self.parameters.get('directions', []) +
+                           other.parameters.get('directions', [])),
+            'vartype': 'multi',
+        }
+        return VariogramDatafile(variogram=new_df, parameters=new_params)
 
 class Variogram:
 
@@ -35,6 +71,7 @@ class Variogram:
         self.lag_tol = params['lag_tolerance']
         self.bandh = params['horizontal_bandwidth']
         self.bandv = params['vertical_bandwidth']
+        self.weight_column = params.get('weight_column', None)
         self.metadata = {
             'path': self.input_drillholes_path,
             'grades': self.input_grades,
@@ -59,17 +96,20 @@ class Variogram:
         real_path_filename = transform_datafile_to_gslib(self.input_drillholes_path)
         ix, iy, iz = grab_index_coordinates(real_path_filename, self.coordinates)
         igrade = grab_index_target(real_path_filename, self.input_grades)
+        iweight = grab_index_target(real_path_filename, self.weight_column) if self.weight_column else 0
 
         temp_params_path = tempfile.NamedTemporaryFile(prefix="params_gamv"+'_', suffix=".par", delete=False)
-        temp_out_filename_path = tempfile.NamedTemporaryFile(prefix="gamv"+'_', suffix=".out", delete=False)
         self.fmt_params_path = globalize_backslashes(temp_params_path.name)
+        temp_params_path.close()
+        temp_out_filename_path = tempfile.NamedTemporaryFile(prefix="gamv"+'_', suffix=".out", delete=False)
         self.fmt_out_path = globalize_backslashes(temp_out_filename_path.name)
+        temp_out_filename_path.close()
         current_dir = os.path.dirname(os.path.abspath(__file__))
         with open(os.path.join(current_dir, '../utils/bin/gamv-generic.par'), 'r') as file:
             lines = file.readlines()
         with open(self.fmt_params_path, 'w') as f:
             lines[1] = f'{globalize_backslashes(real_path_filename)}                      -file with data\n'
-            lines[2] = f'{ix}   {iy}   {iz}                         -   columns for X, Y, Z coordinates\n'
+            lines[2] = f'0   {ix}   {iy}   {iz}   {iweight}   0   0         -columns: BHID,X,Y,Z,WT,FROM,TO\n'
             lines[3] = f'1   {igrade}                             -   number of variables,col numbers\n'
             lines[5] = f'{self.fmt_out_path}                   - file for variogram output\n'
             lines[6] = f'{int(self.lag_count)}                                - number of lags\n'
@@ -102,30 +142,12 @@ class Variogram:
 
     def gamv_formatted_elipsoid(self, gamv_file):
         with open(gamv_file, 'r') as f:
-            file_content = f.read()
-
-        # Split the file content into individual sets
-        sets = file_content.strip().split('Semivariogram')
-        for index, set_content in enumerate(sets[1:], start=1):
-            # Extract variable name for each set
-            variable = re.search(r'tail:([^\s]+)', set_content).group(1)
-            # Remove the first line (unwanted line) from each set
-            set_content_lines = set_content.strip().split('\n')[1:]
-            formatted_content = '\n'.join(set_content_lines)
-
-            # Format the set content
-            formatted_content = f'GAMV\n6\nindex\nsteps\ngamma\npairs\nhead_{variable}\ntail_{variable}\n{formatted_content}'
-            # Write the formatted content to a new file or overwrite the original file
-            with open(f'{os.path.splitext(gamv_file)[0]}_{index}.out', 'w') as file:
-                file.write(formatted_content)
-
-    def gamv_formatted(self, gamv_file):
-        with open(gamv_file, 'r') as f:
-            lines = f.readlines()
-            variable = re.search(r'tail:([^\s]+)', lines[0].strip()).group(1)
-        with open(gamv_file, 'w') as file:
-            lines[0] = f'GAMV\n6\nindex\nsteps\ngamma\npairs\nhead_{variable}\ntail_{variable}\n'
-            file.writelines(lines)
+            content = f.read()
+        parts = content.strip().split('Semivariogram')
+        for index, section in enumerate(parts[1:], start=1):
+            out_path = f'{os.path.splitext(gamv_file)[0]}_{index}.out'
+            with open(out_path, 'w') as f:
+                f.write('Semivariogram' + section)
 
     def run_gamv(self, parameters):
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -136,7 +158,7 @@ class Variogram:
         if "GAMV elapsed time:" in output_str:
             return
         else:
-            raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {parameters}\n{output_str}')
+            raise Exception(f'Something wrong happend after run\n>>> bin/gamv_OpenMP.exe {parameters}\n{output_str}')
 
     def single_semivariogram(self, stand_sills: bool = False) -> VariogramDatafile:
         self.metadata.update({
@@ -145,10 +167,10 @@ class Variogram:
         self.create_params_temp(elipsoid=False, stand_sills=stand_sills)
 
         self.run_gamv(self.fmt_params_path)
-        print(f'{self.fmt_out_path} file created!')
-        self.gamv_formatted(self.fmt_out_path)
-
-        df = read_file_from_gslib(self.fmt_out_path).compute()
+        actual_out_path = f'{os.path.splitext(self.fmt_out_path)[0]}_{self.input_grades}_semivariogram.out'
+        if not os.path.exists(actual_out_path) or os.path.getsize(actual_out_path) == 0:
+            raise RuntimeError(f"gamv produced no output at {actual_out_path}")
+        df = read_file_from_gslib(actual_out_path).compute()
         df.rename(columns={'steps': 'steps_dir1', 'gamma': 'gamma_dir1', 'pairs': 'pairs_dir1'}, inplace=True)
         self.metadata.update({
             'vartype': 'single'
@@ -161,12 +183,16 @@ class Variogram:
         })
         self.create_params_temp(elipsoid=True, stand_sills=stand_sills)
         self.run_gamv(self.fmt_params_path)
+        actual_out_path = f'{os.path.splitext(self.fmt_out_path)[0]}_{self.input_grades}_semivariogram.out'
+        if not os.path.exists(actual_out_path) or os.path.getsize(actual_out_path) == 0:
+            raise RuntimeError(f"gamv produced no output at {actual_out_path}")
 
-        self.gamv_formatted_elipsoid(self.fmt_out_path)
-        print(f'{self.fmt_out_path} file created!')
-        df_1 = read_file_from_gslib(f'{os.path.splitext(self.fmt_out_path)[0]}_1.out').compute()
-        df_2 = read_file_from_gslib(f'{os.path.splitext(self.fmt_out_path)[0]}_2.out').compute()
-        df_3 = read_file_from_gslib(f'{os.path.splitext(self.fmt_out_path)[0]}_3.out').compute()
+        self.gamv_formatted_elipsoid(actual_out_path)
+        print(f'{actual_out_path} file created!')
+        base = os.path.splitext(actual_out_path)[0]
+        df_1 = read_file_from_gslib(f'{base}_1.out').compute()
+        df_2 = read_file_from_gslib(f'{base}_2.out').compute()
+        df_3 = read_file_from_gslib(f'{base}_3.out').compute()
         df_1.rename(columns={'steps': 'steps_dir1', 'gamma': 'gamma_dir1', 'pairs': 'pairs_dir1'}, inplace=True)
         df_2.rename(columns={'steps': 'steps_dir2', 'gamma': 'gamma_dir2', 'pairs': 'pairs_dir2'}, inplace=True)
         df_3.rename(columns={'steps': 'steps_dir3', 'gamma': 'gamma_dir3', 'pairs': 'pairs_dir3'}, inplace=True)
@@ -177,37 +203,56 @@ class Variogram:
         return VariogramDatafile(variogram=pd.concat([df_1, df_2, df_3], axis=1), parameters=self.metadata)
 
 
-    def plot(self, variogram_dataframe, show_pairs=False, export=False):
-        if (variogram_dataframe.shape[1]) > 7:
-            dirs = [f'{self.azim}/{self.dip}', f'{self.azim + 90}/{self.dip}', f'{self.azim}/{self.normalize_dip(self.dip)}']
-            title = f'Ortogonal Variograms for {dirs[0]}'
-            gamma_max = variogram_dataframe[['gamma_dir1', 'gamma_dir2', 'gamma_dir3']].max().max()
+    def plot(self, variogram_datafile, show_pairs=False, export=False, palette=None):
+        if isinstance(variogram_datafile, VariogramDatafile):
+            df = variogram_datafile.load()
+            directions = variogram_datafile.get_metadata().get('directions', [])
+            dirs = [f'{d[0]}/{d[1]}' for d in directions]
         else:
-            dirs = [f'{self.azim}/{self.dip}']
-            title = f'Experimental Variogram {dirs[0]}'
-            gamma_max = variogram_dataframe['gamma_dir1'].max()
-        colors = ['black', 'blue', 'green']
+            df = variogram_datafile
+            n_dirs = df.shape[1] // 3
+            dirs = [f'{self.azim}/{self.dip}'] if n_dirs == 1 else [f'Dir {i+1}' for i in range(n_dirs)]
+
+        n_dirs = len(dirs)
+        gamma_max = df[[f'gamma_dir{i+1}' for i in range(n_dirs)]].max().max()
+        title = f'Experimental Variogram {"  |  ".join(dirs)}'
+        colors = _resolve_palette(palette)
+        if n_dirs > len(colors):
+            colors = (colors * ((n_dirs // len(colors)) + 1))[:n_dirs]
+
+        MIN_MARKER = 10
+        MAX_MARKER = 40
         fig = go.Figure()
         for i, n in enumerate(dirs):
+            mask = df[f'steps_dir{i+1}'] != 0.0
+            x_vals = df.loc[mask, f'steps_dir{i+1}']
+            y_vals = df.loc[mask, f'gamma_dir{i+1}']
+            pairs_col = df.loc[mask, f'pairs_dir{i+1}']
+            if show_pairs:
+                col_min, col_max = pairs_col.min(), pairs_col.max()
+                if col_max > col_min:
+                    marker_size = MIN_MARKER + (pairs_col - col_min) / (col_max - col_min) * (MAX_MARKER - MIN_MARKER)
+                else:
+                    marker_size = pd.Series([MIN_MARKER] * len(pairs_col), index=pairs_col.index)
+            else:
+                marker_size = 12
             fig.add_trace(
                 go.Scatter(
-                    # Para casos donde los lags de algunas direcciones den 0 (porque se acabaron los datos)
-                    # Esto de puede dejar como el lag principal, ya que los valores varian muy poco
-                    x = variogram_dataframe[f'steps_dir{i+1}'],
-                    y = variogram_dataframe[f'gamma_dir{i+1}'],
+                    x = x_vals,
+                    y = y_vals,
                     mode = 'markers+lines',
                     marker = {
-                        'color': 'red',
-                        # Editar esta parte en caso de tener pocos o muchos pares
-                        'size': variogram_dataframe[f'pairs_dir{i+1}']*0.00088 if show_pairs else variogram_dataframe[f'pairs_dir{i+1}']*0
+                        'color': colors[i],
+                        'size': marker_size
                     },
                     line = {
                         'color': colors[i],
-                        'width': 2
+                        'width': 3,
+                        'dash' : "dash"
                     },
                     name = n,
-                    opacity = 0.85,
-                    text = variogram_dataframe[f'pairs_dir{i+1}'],
+                    opacity = 0.9,
+                    text = pairs_col,
                     textposition = "top center",
                     hovertemplate= "Steps: %{x}<br>" +
                     "Variogram: %{y}<br>" +
@@ -215,37 +260,50 @@ class Variogram:
                     "<extra></extra>",
                 )
             )
-        # fig.add_trace(
-        #     go.Scatter(
-        #         x = [0., lag1[-1]],
-        #         y = [sill, sill],
-        #         mode = 'lines',
-        #         line = {
-        #             'color': 'black',
-        #             'width': 2,
-        #             'dash': 'dash'
-        #         },
-        #         showlegend = False,
-        #         opacity = 0.7
-        #     )
-        # )
         fig.update_layout(
-            width = 800,
+            # width = 800,
             margin = dict(l=20, b=20, t=40, r=20),
-            title = {
-                'text': title
-            },
+            title = {'text': title},
             xaxis = {
                 'title': 'Step',
-                'range': [0, variogram_dataframe['steps_dir1'].max()]
+                'range': [0, df['steps_dir1'].max()]
             },
             yaxis = {
                 'title': 'Variograma',
                 'range': [0, gamma_max],
-                # 'tick0': 0,
-                # 'dtick': 0.1
             }
         )
         if export:
             fig.write_html(f'Variogram-{self.azim}-{self.dip}.html')
         return fig
+
+
+if __name__ == '__main__':
+    DATAFILE = r'..\tests\data\sondajes_cerro_blanco_final.dat'
+    COORDINATES = ['Este', 'Norte', 'Cota']
+    GRADE = 'AuGrade'
+
+    base_params = {
+        "azimuth_tolerance": 22.5,
+        "horizontal_bandwidth": 99999.0,
+        "dip": 81.0,
+        "dip_tolerance": 22.5,
+        "vertical_bandwidth": 99999.0,
+        "lag_tolerance": 6.0,
+        "lag_count": 10.0,
+        "lag_size": 12.0,
+        "value": GRADE,
+    }
+
+    # Direction 1 — azimuth 0
+    v1 = Variogram(DATAFILE, COORDINATES, GRADE, {**base_params, "azimuth": 0.0})
+    r1 = v1.single_semivariogram()
+
+    # Direction 2 — azimuth 90
+    v2 = Variogram(DATAFILE, COORDINATES, GRADE, {**base_params, "azimuth": 90.0})
+    r2 = v2.single_semivariogram()
+
+    # Plot both directions on the same figure
+    combined = r1.add_direction(r2)
+    fig_combined = v1.plot(combined, show_pairs=False, palette='andes', export=False)
+    fig_combined.show()
