@@ -133,6 +133,13 @@ dmypy.json
 
 # Pytest data
 tests/data
+tests/outputs/
+
+# Generated plot outputs
+*.html
+*.png
+*.jpeg
+*.jpg
 
 # Claude
 CLAUDE.md
