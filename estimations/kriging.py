@@ -5,14 +5,25 @@ import numpy as np
 from andesite.datafiles.grid import Grid, GridDatafile
 from andesite.utils.manipulations import globalize_backslashes
 from .estimation_exceptions import OutputNameNotProvidedException, SameOutputVariablesException
-from andesite.utils.files import dataframe_to_gslib, grab_index_coordinates, grab_index_target, read_file_from_gslib, transform_datafile_to_gslib
+from andesite.utils.files import (
+    dataframe_to_gslib,
+    grab_index_coordinates,
+    grab_index_target,
+    load_datafile,
+    read_file_from_gslib,
+    transform_datafile_to_gslib,
+)
 
 KT3DSEQ_BIN_PATH = '../utils/bin/kt3d_Seq.exe'
 KT3DPAR_BIN_PATH = '../utils/bin/kt3d_OpenMP.exe'
 KT3DPARAMETERS_PATH = '../utils/bin/kt3d-generic.par'
 
 class KrigingExecutor:
-    def __init__(self, input_drillholes, coordinates, grades, variogram_structs, variogram_nugget, grid_mn, grid_n, grid_siz, output_datafile, parameters, out_vars):
+    def __init__(
+            self, input_drillholes, coordinates, grades, variogram_structs, variogram_nugget,
+            grid_mn, grid_n, grid_siz, output_datafile, parameters, out_vars,
+            ug_enabled=False, ug_grid_datafile_path="", ug_col_name="", ug_target=0,
+            dh_ug_col_name="", dhid_col_name="", jackknife_path=""):
         self.input_drillholes = input_drillholes
         self.coordinates = coordinates
         self.input_grades = grades
@@ -26,6 +37,15 @@ class KrigingExecutor:
         self.kriging_estimate = out_vars[0]
         self.kriging_variance = out_vars[1]
         self.n_structs = len(self.variogram_structs)
+        self.ug_enabled = ug_enabled
+        self.ug_grid_datafile_path = ug_grid_datafile_path
+        self.ug_col_name = ug_col_name
+        self.ug_target = ug_target
+        self.ug_grid_gslib = ""
+        self.dh_ug_col_name = dh_ug_col_name
+        self.dhid_col_name = dhid_col_name
+        self.jackknife_path = jackknife_path
+        self.real_jackknife_path = ""
 
         self.grid = Grid(*self.grid_mn, *self.grid_siz, *self.grid_n)
         self.block_model = self.grid.create()
@@ -46,11 +66,25 @@ class KrigingExecutor:
         directions_fmt = f'         {directions[0]}  {directions[1]}  {directions[2]}     -a_hmax, a_hmin, a_vert\n'
         return angles_fmt, directions_fmt
 
-    def create_kt3d_params(self, cross_val: bool=False):
+    def create_kt3d_params(self, mode: int = 0):
         # variables needed
         self.real_path_drillholes = transform_datafile_to_gslib(self.input_drillholes)
         ix, iy, iz = grab_index_coordinates(self.real_path_drillholes, self.coordinates)
         igrade = grab_index_target(self.real_path_drillholes, self.input_grades)
+
+        # DHID cross-validation: encode string DHID column to integers and add to GSLIB
+        dh_col_idx = 0
+        if self.dhid_col_name:
+            original_df = load_datafile(self.input_drillholes)
+            dhid_vals = original_df[self.dhid_col_name]
+            unique_ids = sorted(dhid_vals.unique())
+            encoding = {v: i + 1 for i, v in enumerate(unique_ids)}
+            encoded = dhid_vals.map(encoding).values
+            gslib_df = read_file_from_gslib(self.real_path_drillholes).compute()
+            gslib_df['DHID_ENCODED'] = encoded
+            dataframe_to_gslib(gslib_df, self.real_path_drillholes)
+            dh_col_idx = grab_index_target(self.real_path_drillholes, 'DHID_ENCODED')
+
         xmn, ymn, zmn = self.grid_mn
         nx, ny, nz = self.grid_n
         xsiz, ysiz, zsiz = self.grid_siz
@@ -71,101 +105,117 @@ class KrigingExecutor:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         with open(os.path.join(current_dir, KT3DPARAMETERS_PATH), 'r') as file:
             lines = file.readlines()
+
+        lines[4] = f'{globalize_backslashes(self.real_path_drillholes)}                     -file with data\n'
+        dh_ug_col_idx = 0
+        if self.ug_enabled and self.dh_ug_col_name:
+            dh_ug_col_idx = grab_index_target(self.real_path_drillholes, self.dh_ug_col_name)
+        lines[5] = f'{dh_col_idx}  {ix}  {iy}  {iz}  {igrade}  0  {dh_ug_col_idx}   -   columns for DH,X,Y,Z,var,sec var,ugcol\n'
+        lines[7] = f'{mode}                                -option: 0=grid, 1=cross, 2=jackknife\n'
+
+        # Jackknife targets file and column indices (mode=2 only)
+        if mode == 2 and self.jackknife_path:
+            self.real_jackknife_path = transform_datafile_to_gslib(self.jackknife_path)
+            jk_ix, jk_iy, jk_iz = grab_index_coordinates(self.real_jackknife_path, self.coordinates)
+            jk_igrade = grab_index_target(self.real_jackknife_path, self.input_grades)
+            lines[8] = f'{globalize_backslashes(self.real_jackknife_path)}     -file with jackknife data\n'
+            lines[9] = f'{jk_ix}   {jk_iy}   {jk_iz}    {jk_igrade}    0     -   columns for X,Y,Z,vr and sec var\n'
+        lines[11] = f'{self.fmt_dbg_path}                         -file for debugging output\n'
+        lines[12] = f'{self.fmt_out_path}                         -file for kriged output\n'
+        lines[13] = f'{int(nx)}   {xmn}    {xsiz}                -nx,xmn,xsiz\n'
+        lines[14] = f'{int(ny)}   {ymn}    {ysiz}                -ny,ymn,ysiz\n'
+        lines[15] = f'{int(nz)}   {zmn}    {zsiz}                  -nz,zmn,zsiz\n'
+        lines[16] = f'{xdc}    {ydc}      {zdc}                    -x,y and z block discretization\n'
+        lines[17] = f'{min_data}    {max_data}                          -min, max data for kriging\n'
+        lines[18] = f'{max_octants}                               -max per octant (0-> not used)\n'
+        lines[19] = f'{xradius}  {yradius}  {zradius}              -maximum search radii\n'
+        lines[20] = f' {xangle}   {yangle}   {zangle}                 -angles for search ellipsoid\n'
+        lines[21] = f'{krig_type}     {krig_mean}                      -0=SK,1=OK,2=non-st SK,3=exdrift\n'
+        lines[26] = f'{self.n_structs}    {self.variogram_nugget}                        -nst, nugget effect\n'
+        for i in range(self.n_structs):
+            angles, directions = self.grab_varmodel_params(self.variogram_structs[i])
+            lines[27 + i*2] = angles
+            lines[28 + i*2] = directions
+
+        cutoff = 27 + 2 * self.n_structs
+
         with open(self.fmt_params_path, 'w') as f:
-            lines[4] = f'{globalize_backslashes(self.real_path_drillholes)}                     -file with data\n'
-            lines[5] = f'0  {ix}  {iy}  {iz}  {igrade}  0                 -   columns for DH,X,Y,Z,var,sec var\n'
-            lines[7] = f'{int(cross_val)}                                -option: 0=grid, 1=cross, 2=jackknife\n'
-            lines[11] = f'{self.fmt_dbg_path}                         -file for debugging output\n'
-            lines[12] = f'{self.fmt_out_path}                         -file for kriged output\n'
-            lines[13] = f'{int(nx)}   {xmn}    {xsiz}                -nx,xmn,xsiz\n'
-            lines[14] = f'{int(ny)}   {ymn}    {ysiz}                -ny,ymn,ysiz\n'
-            lines[15] = f'{int(nz)}   {zmn}    {zsiz}                  -nz,zmn,zsiz\n'
-            lines[16] = f'{xdc}    {ydc}      {zdc}                    -x,y and z block discretization\n'
-            lines[17] = f'{min_data}    {max_data}                          -min, max data for kriging\n'
-            lines[18] = f'{max_octants}                               -max per octant (0-> not used)\n'
-            lines[19] = f'{xradius}  {yradius}  {zradius}              -maximum search radii\n'
-            lines[20] = f' {xangle}   {yangle}   {zangle}                 -angles for search ellipsoid\n'
-            lines[21] = f'{krig_type}     {krig_mean}                      -0=SK,1=OK,2=non-st SK,3=exdrift\n'
-            lines[26] = f'{self.n_structs}    {self.variogram_nugget}                        -nst, nugget effect\n'
-            for i in range(self.n_structs):
-                angles, directions = self.grab_varmodel_params(self.variogram_structs[i])
-                lines[27 + i*2] = angles
-                lines[28 + i*2] = directions
-
-            if self.n_structs == 1:
-                lines[26] = f'2    {self.variogram_nugget}                        -nst, nugget effect\n'
-                sill = np.float32(self.variogram_structs[0]['sill'])
-                model = self.variogram_structs[0]['type']
-                model_idx = 1 if model=='Spherical' else (2 if model=='Exponential' else 3)
-                angles = self.variogram_structs[0]['angles']
-                lines[27] = f'{model_idx}    {sill/2:.4f}  {angles[0]}   {angles[1]}   {angles[2]}       -it,cc,ang1,ang2,ang3\n'
-                lines[28] = directions
-                lines[29] = f'{model_idx}    {sill/2:.4f}  {angles[0]}   {angles[1]}   {angles[2]}       -it,cc,ang1,ang2,ang3\n'
-                lines[30] = directions
-
-            f.writelines(lines)
+            f.writelines(lines[:cutoff])
+            if self.ug_enabled:
+                self.ug_grid_gslib = transform_datafile_to_gslib(self.ug_grid_datafile_path)
+                ug_col_idx = grab_index_target(self.ug_grid_gslib, self.ug_col_name)
+                f.write(f'1                             -use ug kriging (0=no, 1=yes)\n')
+                f.write(f'{globalize_backslashes(self.ug_grid_gslib)}                -external grid file\n')
+                f.write(f'{ug_col_idx}                             -column for UG values in grid file\n')
+                f.write(f'{self.ug_target}                             -target UG to krige\n')
+            else:
+                f.write('0                             -use ug kriging (0=no, 1=yes)\n')
+                f.write('dummy.dat                     -external grid file\n')
+                f.write('0                             -column for UG values in grid file\n')
+                f.write('0                             -target UG to krige\n')
 
         print(f'File {self.fmt_params_path} created!')
         return self.fmt_params_path, self.fmt_out_path
 
-    def run_kt3d(self, cross_val: bool = False):
+    def run_kt3d(self, mode: int = 0):
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        exe_file = KT3DSEQ_BIN_PATH if cross_val else KT3DPAR_BIN_PATH
-        print(f'running >>>{os.path.join(current_dir, exe_file)} {self.fmt_params_path}')
+        exe_file =  KT3DSEQ_BIN_PATH if mode == 2 else KT3DPAR_BIN_PATH
+        print(f'running >>> {os.path.join(current_dir, exe_file)} {self.fmt_params_path}')
         CREATE_NO_WINDOW = 0x08000000
-        output = subprocess.check_output([globalize_backslashes(os.path.join(current_dir, exe_file)), f'{self.fmt_params_path}'], creationflags=CREATE_NO_WINDOW)
+        output = subprocess.check_output([
+            globalize_backslashes(os.path.join(current_dir, exe_file)), f'{self.fmt_params_path}'], creationflags=CREATE_NO_WINDOW, stderr=subprocess.STDOUT)
         output_str = output.decode("utf-8")
-        if "KT3D Version: 3.000 Finished" in output_str:
+        if "KT3D Version: 3.500 Finished" in output_str:
             return True
         else:
             return False
 
-    def format_kt3d_results(self):
-        cores = os.cpu_count()
-
-        target_out_file = self.fmt_out_path
-        final_out_sim = 4000 + cores
-
-        # Concatenate .out files
-        for i in range(4001, final_out_sim + 1):
-            file_sim_name = f"{self.fmt_out_path}{i}"
-            with open(target_out_file, "ab") as target_file, open(file_sim_name, "rb") as source_file:
-                target_file.write(source_file.read())
-            os.remove(file_sim_name)
-        print(f'File {target_out_file} joined correctly')
-
     def check_kriging_variables(self):
+        print("check_kriging_variables() starting ...")
         if self.kriging_estimate == self.kriging_variance:
             raise SameOutputVariablesException("Output variables has the same name")
         if self.kriging_estimate == '' or self.kriging_variance == '':
             raise OutputNameNotProvidedException("Please provide valid names for output variables")
+        print("check_kriging_variables() completed!")
 
     def get_kt_results(self, output):
         kt3d_df = read_file_from_gslib(output).compute()
-        # logger.debug(f'columns of file {os.path.basename(output)}: {kt3d_df.columns}')
-        # logger.debug(f'shape of kriging datafile: {kt3d_df.shape}')
-        return kt3d_df.iloc[:, 0].to_numpy(), kt3d_df.iloc[:, 1].to_numpy()
+        return kt3d_df['Estimate'].to_numpy(), kt3d_df['EstimationVariance'].to_numpy()
 
     def clear(self):
-        for file in [self.fmt_params_path, self.fmt_out_path, self.fmt_dbg_path, self.real_path_drillholes]:
+        files = [self.fmt_params_path, self.fmt_out_path, self.fmt_dbg_path, self.real_path_drillholes]
+        if self.ug_grid_gslib:
+            files.append(self.ug_grid_gslib)
+        if self.real_jackknife_path:
+            files.append(self.real_jackknife_path)
+        for file in files:
             try:
                 os.remove(file)
             except:
                 continue
 
-    def cross_validation(self):
+    def _run_validation(self, mode: int):
         self.check_kriging_variables()
-        params_path, output_path = self.create_kt3d_params(cross_val=True)
-        self.kt_status = self.run_kt3d(cross_val=True)
+        params_path, output_path = self.create_kt3d_params(mode=mode)
+        print(f"After creating the params file {params_path} the KT3D will start")
+        self.kt_status = self.run_kt3d(mode=mode)
         if self.kt_status:
-            valcru_df = read_file_from_gslib(output_path).compute()
-            valcru_df.rename(columns={'Error:est-true': 'Error'}, inplace=True)
-            valcru_df["StandarizedError"] = (valcru_df["True"] - valcru_df["Estimate"]) / np.sqrt(valcru_df["EstimationVariance"])
-            valcru_df["AbsoluteError"] = np.abs(valcru_df["Error"])
-            # valcru_df = valcru_df.replace(-999.0, np.nan)
-            return valcru_df
+            df = read_file_from_gslib(output_path).compute()
+            df = df.rename(columns={'ErrorEstimation': 'Error'})
+            df['StandardizedError'] = (
+                (df['True'] - df['Estimate']) / np.sqrt(df['EstimationVariance'])
+            )
+            df['AbsoluteError'] = np.abs(df['Error'])
+            return df[['X', 'Y', 'Z', 'True', 'Estimate', 'EstimationVariance',
+                        'Error', 'StandardizedError', 'AbsoluteError']]
         else:
-            raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {params_path}')
+            raise Exception(f'KT3D validation failed (mode={mode})\n>>> {params_path}')
+
+    def cross_validation(self):
+        return self._run_validation(mode=1)
+
+    def jackknife(self):
+        return self._run_validation(mode=2)
 
     def estimate(self, just_results=False):
         self.check_kriging_variables()
@@ -173,10 +223,9 @@ class KrigingExecutor:
 
         self.kt_status = self.run_kt3d()
         if self.kt_status:
-            self.format_kt3d_results()
             self.estimate_values, self.variance_values = self.get_kt_results(output_path)
         else:
-            raise Exception(f'Something wrong happend after run\n>>> bin/gamv_openMP.exe {params_path}')
+            raise Exception(f'KT3D estimation failed\n>>> {params_path}')
         if just_results:
             return self.estimate_values, self.variance_values
         else:
