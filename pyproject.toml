@@ -8,7 +8,7 @@ requires = [
 
 [project]
 name = "andesite"
-version = "0.9.9"
+version = "0.9.10"
 authors = [{name = "ANDESITE SpA", email = "axel.troncoso@andesite.cl"}]
 description = "Geostatistical analysis and mining estimation software"
 keywords = [
@@ -47,6 +47,11 @@ urls = {homepage = "http://www.andesite.cl/"}
 tests = [
   "pytest==9.0.2",
   "pytest-cov==7.1.0",
+]
+dev = [
+  "ruff>=0.11",
+  "mypy>=1.14",
+  "bandit>=1.8",
 ]
 
 [tool.uv]
