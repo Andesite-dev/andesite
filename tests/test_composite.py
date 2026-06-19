@@ -1,20 +1,69 @@
-import os
-import time
-from icecream import ic
-from andesite.composite.composite import Assay, Collar, DatafileComposite, Survey
+from __future__ import annotations
+
+import pandas as pd
+import polars as pl
+import pytest
+
+from andesite.composite.compositing import Assay, Collar, DrillholesCampaign, Survey
 
 
-assay_path = os.path.join('data', 'parker', 'Assay.csv')
-collar_path = os.path.join('data', 'parker', 'Collar.csv')
-survey_path = os.path.join('data', 'parker', 'Survey.csv')
-assay = Assay(assay_path)
-ic(assay.get_metadata())
-collar = Collar(collar_path)
-ic(collar.get_metadata())
-survey = Survey(survey_path)
-ic(survey.get_metadata())
-init_time = time.time()
-df_composite = DatafileComposite(assay, collar, survey)
-df_composite.composite(['Cu_pct', 'Au_ppm', 'SAMPLETYPE', 'SAMPLEID'], 2, output_filename='composites_lab_2')
-end_time = time.time()
-print(f'Time elapsed: {(end_time - init_time):.3f} seconds')
+@pytest.fixture(scope="module")
+def assay():
+    df = pl.DataFrame({
+        "HOLEID": ["DH001"] * 5,
+        "FROM": [0.0, 2.0, 4.0, 6.0, 8.0],
+        "TO": [2.0, 4.0, 6.0, 8.0, 10.0],
+        "CuGrade": [0.5, 0.8, 1.2, 0.3, 0.9],
+        "Rockcode": [1, 1, 2, 2, 1],
+    })
+    return Assay(df, dhid="HOLEID", from_col="FROM", to_col="TO", target_variables=["CuGrade", "Rockcode"])
+
+
+@pytest.fixture(scope="module")
+def survey():
+    df = pl.DataFrame({
+        "HOLEID": ["DH001"],
+        "DEPTH": [0.0],
+        "AZ": [0.0],
+        "DIP": [-90.0],
+    })
+    return Survey(df, dhid="HOLEID", depth_col="DEPTH", azimuth_col="AZ", dip_col="DIP")
+
+
+@pytest.fixture(scope="module")
+def collar():
+    df = pl.DataFrame({
+        "HOLEID": ["DH001"],
+        "X": [1000.0],
+        "Y": [2000.0],
+        "Z": [500.0],
+        "LENGTH": [10.0],
+    })
+    return Collar(df, dhid="HOLEID", east_col="X", north_col="Y", elev_col="Z", length_col="LENGTH")
+
+
+@pytest.fixture(scope="module")
+def campaign(assay, survey, collar):
+    return DrillholesCampaign(assay, survey, collar)
+
+
+def test_composite_returns_polars(campaign):
+    result = campaign.composite(comp_length=5)
+    assert isinstance(result, pl.DataFrame)
+
+
+def test_composite_has_coordinate_columns(campaign):
+    result = campaign.composite(comp_length=5)
+    assert "x" in result.columns
+    assert "y" in result.columns
+    assert "z" in result.columns
+
+
+def test_composite_row_count(campaign):
+    result = campaign.composite(comp_length=5)
+    assert len(result) == 2
+
+
+def test_composite_returns_pandas(campaign):
+    result = campaign.composite(comp_length=5, return_dtype="pandas")
+    assert isinstance(result, pd.DataFrame)

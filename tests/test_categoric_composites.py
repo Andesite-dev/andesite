@@ -1,23 +1,36 @@
-# unit test using pytest
-from os.path import join, abspath
-import numpy as np
-import shutil
-import pandas as pd
-import sys
+from __future__ import annotations
+
+import polars as pl
 import pytest
-# Uncomment this line if you have issues with andes module
-# sys.path.append('..')
+
+from andesite.composite.compositing import Assay
 
 
-from andesite.composite.categoric_compositing import one_drill_categoric
+@pytest.fixture(scope="module")
+def assay():
+    df = pl.DataFrame({
+        "HOLEID": ["DH001"] * 5,
+        "FROM": [0.0, 2.0, 4.0, 6.0, 8.0],
+        "TO": [2.0, 4.0, 6.0, 8.0, 10.0],
+        "CuGrade": [0.5, 0.8, 1.2, 0.3, 0.9],
+        "Rockcode": [1, 1, 2, 2, 1],
+    })
+    return Assay(df, dhid="HOLEID", from_col="FROM", to_col="TO", target_variables=["CuGrade", "Rockcode"])
 
-@pytest.fixture(scope='module')
-def drillholes_init():
-    drillholes_path = join('data', 'parker', 'Assay.csv')
-    return pd.read_csv(drillholes_path)
 
-def column_not_categoric_onedrill(drillholes_init):
-    # Raise and Exception if the columns passed in the parameter var_col is not
-    # categoric (not <str>)
-    with pytest.raises(Exception, match='var_col must be categorical'):
-        one_drill_categoric(drillholes_init, 'OTD1155', 'SAMPFROM', 'SAMPTO', 'Cu_pct', 2)
+def test_categoric_regularization_shape(assay):
+    result = assay.categoric_multivar_regularization("DH001", comp_length=5)
+    assert len(result) == 2
+
+
+def test_categoric_regularization_columns(assay):
+    result = assay.categoric_multivar_regularization("DH001", comp_length=5)
+    assert "FROM" in result.columns
+    assert "TO" in result.columns
+    assert "Rockcode" in result.columns
+
+
+def test_categoric_majority_vote(assay):
+    result = assay.categoric_multivar_regularization("DH001", comp_length=5)
+    assert result["Rockcode"][0] == "1"
+    assert result["Rockcode"][1] == "2"

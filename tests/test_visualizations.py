@@ -125,7 +125,7 @@ def ensure_output_dir():
 
 @pytest.fixture(scope="module")
 def df() -> pl.DataFrame:
-    raw = pl.read_csv(DATA_DIR / "samples_cerro_blanco_au.csv")
+    raw = pl.read_csv(DATA_DIR / "sondajes_cerro_blanco_final.csv")
     numeric_cols = [
         c for c in raw.columns
         if raw[c].dtype in (pl.Float64, pl.Float32, pl.Int64, pl.Int32)
@@ -281,7 +281,7 @@ def test_stacked_histogram(df: pl.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 
 def test_correlation_matrix(df: pl.DataFrame) -> None:
-    cols = ["CuGrade", "AuGrade", "Cu-NS"]
+    cols = ["CuGrade", "AuGrade", "CuGrade-NS"]
     pandas_df = df.select(cols).to_pandas()
     corr_matrix = pandas_df.corr()
 

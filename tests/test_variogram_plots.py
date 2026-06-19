@@ -30,7 +30,7 @@ from andesite.variography.modeling import VariogramModeling
 from andesite.visualizations.base_plotly import AndesPlotlyTheme
 from andesite.visualizations.plotly_plots_nevado import apply_nevado_theme
 
-DATA_PATH = str(Path(__file__).parent / "data" / "samples_cerro_blanco_au.csv")
+DATA_PATH = str(Path(__file__).parent / "data" / "sondajes_cerro_blanco_final.csv")
 OUTPUT_DIR = Path(__file__).parent / "outputs"
 
 _COORDS = ["Este", "Norte", "Cota"]

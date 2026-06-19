@@ -36,7 +36,7 @@ def build_scatter_figure(
                 scatter_cls(
                     x=cx,
                     y=cy,
-                    mode="markers+lines",
+                    mode="markers",
                     name=cat_str,
                     marker={
                         "size": theme.scatter_marker_size,

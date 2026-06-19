@@ -8,7 +8,7 @@ requires = [
 
 [project]
 name = "andesite"
-version = "0.9.8"
+version = "0.9.9"
 authors = [{name = "ANDESITE SpA", email = "axel.troncoso@andesite.cl"}]
 description = "Geostatistical analysis and mining estimation software"
 keywords = [
